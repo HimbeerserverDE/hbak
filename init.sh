@@ -39,7 +39,7 @@ for SUBVOL in ${SUBVOLS}; do
 	btrfs subvolume snapshot -r /mnt/hbak/${SUBVOL} /mnt/hbak/snapshots/${SUBVOL}_${TS}
 
 	for REMOTE in ${REMOTES}; do
-		(echo "${HOST}_full_${SUBVOL}_${TS}"; btrfs send /mnt/hbak/snapshots/${SUBVOL}_${TS} | pv | gpg --batch --symmetric -a --cipher-algo AES256 --passphrase-file /etc/hbak.d/passphrase) | nc ${REMOTE} 45545
+		(echo "${HOST}_full_${SUBVOL}_${TS}"; btrfs send /mnt/hbak/snapshots/${SUBVOL}_${TS} | pv | gpg --batch --symmetric -a --cipher-algo AES256 --passphrase-file /etc/hbak.d/passphrase) | nc -N ${REMOTE} 45545
 	done
 done
 
