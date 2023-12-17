@@ -26,7 +26,7 @@ btrfs subvolume create /mnt/hbak/snapshots
 btrfs subvolume create /mnt/hbak/backups
 
 for SUBVOL in ${SUBVOLS}; do
-	TS=$(date +%Y%M%d%H%M%S)
+	TS=$(date +%Y%m%d%H%M%S)
 
 	btrfs subvolume snapshot -r /mnt/hbak/${SUBVOL} /mnt/hbak/snapshots/${SUBVOL}_${TS}
 
