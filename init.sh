@@ -27,6 +27,8 @@ chown -R root:root /etc/hbak.d
 mkdir -p /mnt/hbak
 mount -o compress=zstd UUID=$(find_partition_uuid) /mnt/hbak
 
+trap umount_all INT
+
 btrfs subvolume create /mnt/hbak/snapshots
 btrfs subvolume create /mnt/hbak/backups
 
