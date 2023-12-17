@@ -6,6 +6,7 @@ find_partition_uuid() {
 
 umount_all() {
 	umount /mnt/hbak
+	sleep 1
 	mountpoint -q /mnt/hbak && umount_all
 }
 
