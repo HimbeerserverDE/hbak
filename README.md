@@ -7,3 +7,4 @@ Simple distributed backup utility for btrfs.
 * gpg
 * netcat
 * pv
+* socat
