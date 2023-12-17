@@ -6,7 +6,7 @@ find_partition_uuid() {
 
 HOST=$(hostname)
 
-read -p "Enter new passphrase: " -s PASSPHRASE
+read -p "Enter new passphrase: " -s PASSPHRASE && echo
 read -p "Enter subvolumes to backup: " SUBVOLS
 read -p "Enter remotes to sync to: " REMOTES
 
@@ -26,7 +26,7 @@ btrfs subvolume create /mnt/hbak/snapshots
 btrfs subvolume create /mnt/hbak/backups
 
 for SUBVOL in ${SUBVOLS}; do
-	btrfs subvolume snapshot -r /mnt/hbak/${SUBVOL} /mnt/hbak/snapshots/${SUBVOL}
+	btrfs subvolume snapshot -r /mnt/hbak/${SUBVOL} /mnt/hbak/snapshots/${SUBVOL}_$(date +%Y%M%d%H%M%S)
 
 	for REMOTE in ${REMOTES}; do
 		(echo "${HOST}_${SUBVOL}"; btrfs send /mnt/hbak/snapshots/${SUBVOL} | pv | gpg --batch --symmetric -a --cipher-algo AES256 --passphrase-file /etc/hbak.d/passphrase) | nc ${REMOTE} 45545
