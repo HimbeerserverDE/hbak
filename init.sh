@@ -4,6 +4,11 @@ find_partition_uuid() {
 	findmnt -nso UUID -M /
 }
 
+umount_all() {
+	umount /mnt/hbak
+	mountpoint -q /mnt/hbak && umount_all
+}
+
 HOST=$(hostname)
 
 read -p "Enter new passphrase: " -s PASSPHRASE && echo
@@ -35,4 +40,4 @@ for SUBVOL in ${SUBVOLS}; do
 	done
 done
 
-umount /mnt/hbak
+umount_all
