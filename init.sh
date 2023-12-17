@@ -32,3 +32,5 @@ for SUBVOL in ${SUBVOLS}; do
 		(echo "${HOST}_${SUBVOL}"; btrfs send /mnt/hbak/snapshots/${SUBVOL} | pv | gpg --batch --symmetric -a --cipher-algo AES256 --passphrase-file /etc/hbak.d/passphrase) | nc ${REMOTE} 45545
 	done
 done
+
+umount /mnt/hbak
