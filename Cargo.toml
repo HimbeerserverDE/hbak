@@ -1,2 +1,3 @@
 [workspace]
-members = []
+members = ["hbak", "hbakd"]
+resolver = "2"
