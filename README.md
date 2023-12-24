@@ -34,8 +34,9 @@ Components
 
 There are two main components:
 
-* hbak: The main snapshotter handling encryption and file distribution.
-* hbakd: A background process responsible for handling push and pull requests.
+* hbak: Snapshotting and recovery tool handling encryption and file distribution.
+* hbakd: Background process responsible for handling push and pull requests.
+* hbak\_common: Main library for node authentication and communication.
 
-Both programs require root privileges. Automation is handled externally
+Both binaries require root privileges. Automation is handled externally
 by tools like cron or anacron.

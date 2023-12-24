@@ -1,3 +1,3 @@
 [workspace]
-members = ["hbak", "hbakd"]
+members = ["hbak", "hbakd", "hbak_common"]
 resolver = "2"

@@ -7,5 +7,9 @@ name = "hbak"
 version = "0.1.0"
 
 [[package]]
+name = "hbak_common"
+version = "0.1.0"
+
+[[package]]
 name = "hbakd"
 version = "0.1.0"
