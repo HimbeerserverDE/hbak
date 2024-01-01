@@ -1,19 +1,21 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use chrono::prelude::*;
 use chrono::serde::ts_seconds;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
 pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 
 /// A `Snapshot` uniquely identifies a full or incremental btrfs snapshot
-/// of a node via the node name and creation date.
+/// of a node via the node name, subvolume name and creation date.
 ///
 /// To construct this type, use [`Node::snapshot_now`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
     node_name: String,
+    subvol: String,
     #[serde(with = "ts_seconds")]
     taken: DateTime<Utc>,
 }
@@ -24,6 +26,11 @@ impl Snapshot {
     /// Returns the name of the node the `Snapshot` represents.
     pub fn node_name(&self) -> &str {
         &self.node_name
+    }
+
+    /// Returns the name of the subvolume the `Snapshot` represents.
+    pub fn subvol(&self) -> &str {
+        &self.subvol
     }
 
     /// Returns the timestamp of when the `Snapshot` was taken.
@@ -38,7 +45,7 @@ impl Snapshot {
         let mut path_buf = PathBuf::new();
 
         path_buf.push(SNAPSHOT_DIR);
-        path_buf.push(self);
+        path_buf.push(self.to_string());
 
         path_buf
     }
@@ -50,18 +57,21 @@ impl Snapshot {
         let mut path_buf = PathBuf::new();
 
         path_buf.push(BACKUP_DIR);
-        path_buf.push(self);
+        path_buf.push(self.to_string());
 
         path_buf
     }
 }
 
-impl AsRef<Path> for Snapshot {
-    fn as_ref(&self) -> &Path {
-        let taken_formatted = self.taken().format(Self::PATH_FMT);
-        let file_name = format!("{}_{}", self.node_name(), taken_formatted);
-
-        Path::new(&file_name)
+impl fmt::Display for Snapshot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}_{}_{}",
+            self.node_name(),
+            self.subvol(),
+            self.taken().format(Self::PATH_FMT)
+        )
     }
 }
 
