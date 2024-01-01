@@ -1,8 +1,9 @@
+use crate::SnapshotParseError;
+
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use chrono::prelude::*;
-use chrono::serde::ts_seconds;
 use serde::{Deserialize, Serialize};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
@@ -16,8 +17,7 @@ pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 pub struct Snapshot {
     node_name: String,
     subvol: String,
-    #[serde(with = "ts_seconds")]
-    taken: DateTime<Utc>,
+    taken: NaiveDateTime,
 }
 
 impl Snapshot {
@@ -34,7 +34,7 @@ impl Snapshot {
     }
 
     /// Returns the timestamp of when the `Snapshot` was taken.
-    pub fn taken(&self) -> DateTime<Utc> {
+    pub fn taken(&self) -> NaiveDateTime {
         self.taken
     }
 
@@ -76,18 +76,39 @@ impl fmt::Display for Snapshot {
 }
 
 impl TryFrom<&str> for Snapshot {
-    type Error = ();
+    type Error = SnapshotParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        todo!()
+        let mut tokens = value.split('_');
+
+        Ok(Self {
+            node_name: tokens
+                .next()
+                .ok_or(SnapshotParseError::MissingNodeName)?
+                .to_string(),
+            subvol: tokens
+                .next()
+                .ok_or(SnapshotParseError::MissingSubvolume)?
+                .to_string(),
+            taken: NaiveDateTime::parse_from_str(
+                tokens.next().ok_or(SnapshotParseError::MissingTimeTaken)?,
+                Self::PATH_FMT,
+            )?,
+        })
     }
 }
 
 impl TryFrom<&Path> for Snapshot {
-    type Error = ();
+    type Error = SnapshotParseError;
 
     fn try_from(value: &Path) -> Result<Self, Self::Error> {
-        todo!()
+        Self::try_from(
+            value
+                .file_name()
+                .ok_or(SnapshotParseError::NoFileName)?
+                .to_str()
+                .ok_or(SnapshotParseError::InvalidUnicode)?,
+        )
     }
 }
 
