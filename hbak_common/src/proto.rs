@@ -17,6 +17,7 @@ pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 pub struct Snapshot {
     node_name: String,
     subvol: String,
+    is_incremental: bool,
     taken: NaiveDateTime,
 }
 
@@ -31,6 +32,11 @@ impl Snapshot {
     /// Returns the name of the subvolume the `Snapshot` represents.
     pub fn subvol(&self) -> &str {
         &self.subvol
+    }
+
+    /// Reports whether the `Snapshot` is incremental (is full otherwise).
+    pub fn is_incremental(&self) -> bool {
+        self.is_incremental
     }
 
     /// Returns the timestamp of when the `Snapshot` was taken.
@@ -67,9 +73,10 @@ impl fmt::Display for Snapshot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}_{}_{}",
+            "{}_{}_{}_{}",
             self.node_name(),
             self.subvol(),
+            if self.is_incremental { "incr" } else { "full" },
             self.taken().format(Self::PATH_FMT)
         )
     }
@@ -81,19 +88,20 @@ impl TryFrom<&str> for Snapshot {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut tokens = value.split('_');
 
+        let node_name = tokens.next().ok_or(SnapshotParseError::MissingNodeName)?;
+        let subvol = tokens.next().ok_or(SnapshotParseError::MissingSubvolume)?;
+        let ty = tokens.next().ok_or(SnapshotParseError::MissingType)?;
+        let taken = tokens.next().ok_or(SnapshotParseError::MissingTimeTaken)?;
+
         Ok(Self {
-            node_name: tokens
-                .next()
-                .ok_or(SnapshotParseError::MissingNodeName)?
-                .to_string(),
-            subvol: tokens
-                .next()
-                .ok_or(SnapshotParseError::MissingSubvolume)?
-                .to_string(),
-            taken: NaiveDateTime::parse_from_str(
-                tokens.next().ok_or(SnapshotParseError::MissingTimeTaken)?,
-                Self::PATH_FMT,
-            )?,
+            node_name: node_name.to_string(),
+            subvol: subvol.to_string(),
+            is_incremental: match ty {
+                "full" => false,
+                "incr" => true,
+                _ => return Err(SnapshotParseError::InvalidType(ty.to_string())),
+            },
+            taken: NaiveDateTime::parse_from_str(taken, Self::PATH_FMT)?,
         })
     }
 }
@@ -110,11 +118,4 @@ impl TryFrom<&Path> for Snapshot {
                 .ok_or(SnapshotParseError::InvalidUnicode)?,
         )
     }
-}
-
-/// The `SnapshotMetadata` contains information on a [`Snapshot`]
-/// including whether it is full or incremental.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SnapshotMetadata {
-    pub is_incremental: bool,
 }

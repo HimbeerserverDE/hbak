@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SnapshotParseError {
+    #[error("Invalid snapshot type \"{0}\", expected \"full\" or \"incr\"")]
+    InvalidType(String),
     #[error("Snapshot path contains invalid unicode")]
     InvalidUnicode,
 
@@ -9,6 +11,8 @@ pub enum SnapshotParseError {
     MissingNodeName,
     #[error("Incomplete snapshot identifier: Missing subvolume")]
     MissingSubvolume,
+    #[error("Incomplete snapshot identifier: Missing snapshot type")]
+    MissingType,
     #[error("Incomplete snapshot identifier: Missing capture timestamp")]
     MissingTimeTaken,
     #[error("Snapshot path ends in ..")]
