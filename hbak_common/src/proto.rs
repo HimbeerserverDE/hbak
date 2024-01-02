@@ -145,6 +145,12 @@ impl Volume {
     }
 }
 
+impl fmt::Display for Volume {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}_{}", self.node_name, self.subvol)
+    }
+}
+
 impl TryFrom<&str> for Volume {
     type Error = VolumeParseError;
 
