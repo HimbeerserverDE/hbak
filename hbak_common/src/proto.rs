@@ -132,7 +132,7 @@ impl Volume {
     /// Constructs a new `Volume` using the local node name
     /// and the specified subvolume name.
     pub fn from_subvol(subvol: String) -> Result<Self, LocalNodeError> {
-        let node = Node::local()?;
+        let node = LocalNode::new()?;
 
         if node.owns_subvol(&subvol) {
             return Err(LocalNodeError::NoSuchSubvolume(subvol.clone()));
@@ -147,26 +147,34 @@ impl Volume {
 
 /// A `Node` is a member of a distributed backup network
 /// that can run its own `Volumes` and store those of other `Node`s.
+pub trait Node {
+    /// Returns the name of the `Node`.
+    fn name(&self) -> &str;
+}
+
+/// A `LocalNode` represents the current machine.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Node {
+pub struct LocalNode {
     config: NodeConfig,
 }
 
-impl Node {
-    /// Returns a new `Node` representing the local machine.
-    pub fn local() -> Result<Self, LocalNodeError> {
+impl LocalNode {
+    /// Returns a new `LocalNode` representing the local machine.
+    pub fn new() -> Result<Self, LocalNodeError> {
         Ok(Self {
             config: NodeConfig::load()?,
         })
     }
 
-    /// Returns the name of the `Node`.
-    pub fn name(&self) -> &str {
-        &self.config.node_name
-    }
-
-    /// Reports whether the `Node` is the origin of the specified subvolume.
+    /// Reports whether the `LocalNode` is the origin of the specified subvolume.
     pub fn owns_subvol(&self, subvol: &String) -> bool {
         self.config.subvols.contains(subvol)
+    }
+}
+
+impl Node for LocalNode {
+    /// Returns the name of the `LocalNode`.
+    fn name(&self) -> &str {
+        &self.config.node_name
     }
 }
