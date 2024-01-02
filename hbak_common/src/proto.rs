@@ -23,7 +23,7 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    const PATH_FMT: &str = "%Y%m%d%H%M%S";
+    const TIMESTAMP_FMT: &str = "%Y%m%d%H%M%S";
 
     /// Returns the name of the node the `Snapshot` represents.
     pub fn node_name(&self) -> &str {
@@ -78,7 +78,7 @@ impl fmt::Display for Snapshot {
             self.node_name(),
             self.subvol(),
             if self.is_incremental { "incr" } else { "full" },
-            self.taken().format(Self::PATH_FMT)
+            self.taken().format(Self::TIMESTAMP_FMT)
         )
     }
 }
@@ -102,7 +102,7 @@ impl TryFrom<&str> for Snapshot {
                 "incr" => true,
                 _ => return Err(SnapshotParseError::InvalidType(ty.to_string())),
             },
-            taken: NaiveDateTime::parse_from_str(taken, Self::PATH_FMT)?,
+            taken: NaiveDateTime::parse_from_str(taken, Self::TIMESTAMP_FMT)?,
         })
     }
 }
