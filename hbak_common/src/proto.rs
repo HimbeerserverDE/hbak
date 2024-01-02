@@ -187,6 +187,12 @@ impl Node for AnyNode {
     }
 }
 
+impl fmt::Display for AnyNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 impl From<String> for AnyNode {
     fn from(node_name: String) -> Self {
         Self { node_name }
@@ -217,5 +223,11 @@ impl Node for LocalNode {
     /// Returns the name of the `LocalNode`.
     fn name(&self) -> &str {
         &self.config.node_name
+    }
+}
+
+impl fmt::Display for LocalNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
