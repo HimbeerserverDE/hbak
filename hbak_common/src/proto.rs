@@ -131,7 +131,7 @@ pub struct Volume {
 impl Volume {
     /// Constructs a new `Volume` using the local node name
     /// and the specified subvolume name.
-    pub fn from_subvol(subvol: String) -> Result<Self, LocalNodeError> {
+    pub fn new_local(subvol: String) -> Result<Self, LocalNodeError> {
         let node = LocalNode::new()?;
 
         if node.owns_subvol(&subvol) {
