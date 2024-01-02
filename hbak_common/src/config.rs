@@ -23,10 +23,10 @@ pub struct NodeConfig {
     /// **Remember this passphrase at all costs. Losing it makes it impossible
     /// to recover any of the backups.**
     pub passphrase: String,
-    /// The nodes to push (encrypted) owned or replicated subvolumes to.
+    /// The nodes to push (encrypted) owned or replicated volumes to.
     pub push: Vec<RemoteNode>,
     /// The nodes to pull (encrypted) replicas of their owned
-    /// or replicated subvolumes from.
+    /// or replicated volumes from.
     pub pull: Vec<RemoteNode>,
     /// The authentication details and privileges of other nodes
     /// for verification when they connect.
@@ -45,11 +45,11 @@ impl NodeConfig {
 /// A `RemoteNode` defines a network node that can be interacted with.
 /// Backups can be pushed to or pulled from a `RemoteNode`.
 ///
-/// The meaning of the `subvols` field differs based on the context
+/// The meaning of the `vols` field differs based on the context
 /// the `RemoteNode` appears in:
 ///
-/// * Push: The snapshots to push to the remote node.
-/// * Pull: The snapshots to pull from the remote node,
+/// * Push: The volumes to push to the remote node.
+/// * Pull: The volumes to pull from the remote node,
 ///         must not include snapshots owned by the local node.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RemoteNode {
@@ -57,8 +57,8 @@ pub struct RemoteNode {
     pub address: String,
     /// The shared secret for mutual authentication.
     pub secret: String,
-    /// The subvolumes to push.
-    pub subvols: Vec<String>,
+    /// The volumes to interact with, see above for details.
+    pub volumes: Vec<String>,
 }
 
 /// A `RemoteNodeAuth` defines authentication and authorization details
@@ -67,7 +67,7 @@ pub struct RemoteNode {
 pub struct RemoteNodeAuth {
     /// The shared secret for mutual authentication.
     pub secret: String,
-    /// The subvolumes the remote node is allowed to push.
+    /// The volumes the remote node is allowed to push.
     /// Must not include subvolumes owned by the local node.
     pub push: Vec<String>,
     /// The volumes the remote node is allowed to pull.
