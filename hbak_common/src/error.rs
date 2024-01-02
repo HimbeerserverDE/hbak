@@ -45,6 +45,20 @@ pub enum SnapshotParseError {
     MalformedTimeTaken(#[from] chrono::ParseError),
 }
 
+/// A `VolumeParseError` indicates a failure parsing a `Volume`.
+#[derive(Debug, Error)]
+pub enum VolumeParseError {
+    /// The identifier is missing the node name or is completely empty.
+    ///
+    /// This variant should never actually happen:
+    /// String splitting should always return at least one item.
+    #[error("Incomplete volume identifier: Missing node name")]
+    MissingNodeName,
+    /// The identifier is missing the subvolume name.
+    #[error("Incomplete volume identifier: Missing subvolume")]
+    MissingSubvolume,
+}
+
 /// A `LocalNodeError` indicates an error condition on the current node.
 #[derive(Debug, Error)]
 pub enum LocalNodeError {

@@ -1,5 +1,5 @@
 use crate::config::NodeConfig;
-use crate::{LocalNodeError, SnapshotParseError};
+use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -141,6 +141,22 @@ impl Volume {
         Ok(Self {
             node_name: node.name().to_string(),
             subvol,
+        })
+    }
+}
+
+impl TryFrom<&str> for Volume {
+    type Error = VolumeParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut tokens = value.split('_');
+
+        let node_name = tokens.next().ok_or(VolumeParseError::MissingNodeName)?;
+        let subvol = tokens.next().ok_or(VolumeParseError::MissingSubvolume)?;
+
+        Ok(Self {
+            node_name: node_name.to_string(),
+            subvol: subvol.to_string(),
         })
     }
 }
