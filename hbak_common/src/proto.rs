@@ -174,6 +174,25 @@ pub trait Node {
     fn name(&self) -> &str;
 }
 
+/// An `AnyNode` represents any machine, possibly the current one.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnyNode {
+    node_name: String,
+}
+
+impl Node for AnyNode {
+    /// Returns the name of the `AnyNode`.
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+}
+
+impl From<String> for AnyNode {
+    fn from(node_name: String) -> Self {
+        Self { node_name }
+    }
+}
+
 /// A `LocalNode` represents the current machine.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalNode {
