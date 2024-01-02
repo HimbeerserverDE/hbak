@@ -1,4 +1,5 @@
-use crate::SnapshotParseError;
+use crate::config::NodeConfig;
+use crate::{LocalNodeError, SnapshotParseError};
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,7 @@ pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 /// A `Snapshot` uniquely identifies a full or incremental btrfs snapshot
 /// of a node via the node name, subvolume name and creation date.
 ///
-/// To construct this type, use [`Node::snapshot_now`].
+/// To construct this type, use [`Volume::snapshot_now`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
     node_name: String,
@@ -117,5 +118,55 @@ impl TryFrom<&Path> for Snapshot {
                 .to_str()
                 .ok_or(SnapshotParseError::InvalidUnicode)?,
         )
+    }
+}
+
+/// A `Volume` is a unique combination of btrfs subvolume and host name.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Volume {
+    node_name: String,
+    subvol: String,
+}
+
+impl Volume {
+    /// Constructs a new `Volume` using the local node name
+    /// and the specified subvolume name.
+    pub fn from_subvol(subvol: String) -> Result<Self, LocalNodeError> {
+        let node = Node::local()?;
+
+        if node.owns_subvol(&subvol) {
+            return Err(LocalNodeError::NoSuchSubvolume(subvol.clone()));
+        }
+
+        Ok(Self {
+            node_name: node.name().to_string(),
+            subvol,
+        })
+    }
+}
+
+/// A `Node` is a member of a distributed backup network
+/// that can run its own `Volumes` and store those of other `Node`s.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Node {
+    config: NodeConfig,
+}
+
+impl Node {
+    /// Returns a new `Node` representing the local machine.
+    pub fn local() -> Result<Self, LocalNodeError> {
+        Ok(Self {
+            config: NodeConfig::load()?,
+        })
+    }
+
+    /// Returns the name of the `Node`.
+    pub fn name(&self) -> &str {
+        &self.config.node_name
+    }
+
+    /// Reports whether the `Node` is the origin of the specified subvolume.
+    pub fn owns_subvol(&self, subvol: &String) -> bool {
+        self.config.subvols.contains(subvol)
     }
 }
