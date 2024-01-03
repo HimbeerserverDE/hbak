@@ -36,11 +36,13 @@ pub struct NodeConfig {
 impl NodeConfig {
     const PATH: &str = "/etc/hbak.conf";
 
+    /// Loads the configuration file of the current machine.
     pub fn load() -> Result<Self, LocalNodeError> {
         let s = fs::read_to_string(Self::PATH)?;
         Ok(toml::from_str(&s)?)
     }
 
+    /// Saves the configuration to the configuration file on the current machine.
     pub fn save(&self) -> Result<(), LocalNodeError> {
         let s = toml::to_string_pretty(self)?;
         fs::write(Self::PATH, s)?;
