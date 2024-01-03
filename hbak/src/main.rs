@@ -1,4 +1,4 @@
-use hbak_common::config::{NodeConfig, RemoteNode};
+use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::system;
 
 use clap::{Parser, Subcommand};
@@ -56,6 +56,23 @@ enum Commands {
     RmPull {
         /// The network address and port of the node to forget.
         address: String,
+    },
+    /// Add or modify authentication and authorization information for a remote client.
+    Grant {
+        /// The name of the remote node to apply the information to.
+        node_name: String,
+        /// The shared secret for mutual authentication.
+        secret: String,
+        /// The volumes the remote node is allowed to push.
+        /// Must not include subvolumes owned by the local node.
+        push: Vec<String>,
+        /// The volumes the remote node is allowed to pull.
+        pull: Vec<String>,
+    },
+    /// Revoke a remote client all access and delete local configuration about it.
+    Revoke {
+        /// The name of the remote node to remove from the security configuration.
+        node_name: String,
     },
 }
 
@@ -120,6 +137,29 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             let mut node_config = NodeConfig::load()?;
 
             node_config.pull.retain(|item| item.address != address);
+            node_config.save()?;
+        }
+        Commands::Grant {
+            node_name,
+            secret,
+            push,
+            pull,
+        } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.auth.retain(|item| item.node_name != node_name);
+            node_config.auth.push(RemoteNodeAuth {
+                node_name,
+                secret,
+                push,
+                pull,
+            });
+            node_config.save()?;
+        }
+        Commands::Revoke { node_name } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.auth.retain(|item| item.node_name != node_name);
             node_config.save()?;
         }
     }
