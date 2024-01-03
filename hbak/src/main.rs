@@ -33,8 +33,6 @@ enum Commands {
     AddPush {
         /// The network address and port of the node to push to.
         address: String,
-        /// The shared secret for mutual authentication.
-        secret: String,
         /// The volumes to push to the remote node.
         volumes: Vec<String>,
     },
@@ -47,8 +45,6 @@ enum Commands {
     AddPull {
         /// The network address and port of the node to pull from.
         address: String,
-        /// The shared secret for mutual authentication.
-        secret: String,
         /// The volumes to pull from the remote node.
         volumes: Vec<String>,
     },
@@ -61,8 +57,6 @@ enum Commands {
     Grant {
         /// The name of the remote node to apply the information to.
         node_name: String,
-        /// The shared secret for mutual authentication.
-        secret: String,
         /// The volumes the remote node is allowed to push.
         /// Must not include subvolumes owned by the local node.
         push: Vec<String>,
@@ -97,11 +91,9 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.subvols.retain(|item| *item != subvol);
             node_config.save()?;
         }
-        Commands::AddPush {
-            address,
-            secret,
-            volumes,
-        } => {
+        Commands::AddPush { address, volumes } => {
+            let secret = rpassword::prompt_password("Enter shared secret: ")?;
+
             let mut node_config = NodeConfig::load()?;
 
             node_config.push.retain(|item| item.address != address);
@@ -118,11 +110,9 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.push.retain(|item| item.address != address);
             node_config.save()?;
         }
-        Commands::AddPull {
-            address,
-            secret,
-            volumes,
-        } => {
+        Commands::AddPull { address, volumes } => {
+            let secret = rpassword::prompt_password("Enter shared secret: ")?;
+
             let mut node_config = NodeConfig::load()?;
 
             node_config.pull.retain(|item| item.address != address);
@@ -141,10 +131,11 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
         }
         Commands::Grant {
             node_name,
-            secret,
             push,
             pull,
         } => {
+            let secret = rpassword::prompt_password("Enter shared secret: ")?;
+
             let mut node_config = NodeConfig::load()?;
 
             node_config.auth.retain(|item| item.node_name != node_name);
