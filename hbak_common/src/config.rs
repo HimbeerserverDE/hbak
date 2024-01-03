@@ -95,6 +95,8 @@ pub struct RemoteNode {
 /// of a network node.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RemoteNodeAuth {
+    /// The name of the remote node to apply the details to.
+    pub node_name: String,
     /// The shared secret for mutual authentication.
     pub secret: String,
     /// The volumes the remote node is allowed to push.
