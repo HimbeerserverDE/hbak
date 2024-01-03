@@ -46,6 +46,7 @@ enum Commands {
         /// The network address and port of the node to pull from.
         address: String,
         /// The volumes to pull from the remote node.
+        /// Must not include subvolumes owned by the local node.
         volumes: Vec<String>,
     },
     /// Remove a pull remote without deleting anything.
