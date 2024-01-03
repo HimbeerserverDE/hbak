@@ -43,6 +43,20 @@ enum Commands {
         /// The network address and port of the node to forget.
         address: String,
     },
+    /// Add or modify a remote to pull volumes from.
+    AddPull {
+        /// The network address and port of the node to pull from.
+        address: String,
+        /// The shared secret for mutual authentication.
+        secret: String,
+        /// The volumes to pull from the remote node.
+        volumes: Vec<String>,
+    },
+    /// Remove a pull remote without deleting anything.
+    RmPull {
+        /// The network address and port of the node to forget.
+        address: String,
+    },
 }
 
 fn main() -> Result<(), hbak_common::LocalNodeError> {
@@ -85,6 +99,27 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             let mut node_config = NodeConfig::load()?;
 
             node_config.push.retain(|item| item.address != address);
+            node_config.save()?;
+        }
+        Commands::AddPull {
+            address,
+            secret,
+            volumes,
+        } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.pull.retain(|item| item.address != address);
+            node_config.pull.push(RemoteNode {
+                address,
+                secret,
+                volumes,
+            });
+            node_config.save()?;
+        }
+        Commands::RmPull { address } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.pull.retain(|item| item.address != address);
             node_config.save()?;
         }
     }
