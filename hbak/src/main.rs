@@ -61,8 +61,10 @@ enum Commands {
         node_name: String,
         /// The volumes the remote node is allowed to push.
         /// Subvolumes owned by the local node are silently ignored.
+        #[arg(long = "push")]
         push: Vec<String>,
         /// The volumes the remote node is allowed to pull.
+        #[arg(long = "pull")]
         pull: Vec<String>,
     },
     /// Revoke a remote client all access and delete local configuration about it.
