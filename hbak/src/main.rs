@@ -1,4 +1,5 @@
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
+use hbak_common::proto::LocalNode;
 use hbak_common::system;
 
 use clap::{Parser, Subcommand};
@@ -46,7 +47,7 @@ enum Commands {
         /// The network address and port of the node to pull from.
         address: String,
         /// The volumes to pull from the remote node.
-        /// Must not include subvolumes owned by the local node.
+        /// Subvolumes owned by the local node are silently ignored.
         volumes: Vec<String>,
     },
     /// Remove a pull remote without deleting anything.
@@ -59,7 +60,7 @@ enum Commands {
         /// The name of the remote node to apply the information to.
         node_name: String,
         /// The volumes the remote node is allowed to push.
-        /// Must not include subvolumes owned by the local node.
+        /// Subvolumes owned by the local node are silently ignored.
         push: Vec<String>,
         /// The volumes the remote node is allowed to pull.
         pull: Vec<String>,
@@ -111,7 +112,14 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.push.retain(|item| item.address != address);
             node_config.save()?;
         }
-        Commands::AddPull { address, volumes } => {
+        Commands::AddPull {
+            address,
+            mut volumes,
+        } => {
+            let local_node = LocalNode::new()?;
+
+            volumes.retain(|subvol| !local_node.owns_subvol(subvol));
+
             let secret = rpassword::prompt_password("Enter shared secret: ")?;
 
             let mut node_config = NodeConfig::load()?;
@@ -132,9 +140,13 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
         }
         Commands::Grant {
             node_name,
-            push,
+            mut push,
             pull,
         } => {
+            let local_node = LocalNode::new()?;
+
+            push.retain(|subvol| !local_node.owns_subvol(subvol));
+
             let secret = rpassword::prompt_password("Enter shared secret: ")?;
 
             let mut node_config = NodeConfig::load()?;
