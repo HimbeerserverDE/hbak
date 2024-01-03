@@ -1,4 +1,5 @@
 use hbak_common::config::NodeConfig;
+use hbak_common::system;
 
 use clap::{Parser, Subcommand};
 
@@ -41,7 +42,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_name,
             passphrase,
         } => {
-            hbak_common::system::init(device, node_name, passphrase)?;
+            system::init(device, node_name, passphrase)?;
         }
         Commands::Track { subvol } => {
             let mut node_config = NodeConfig::load()?;
