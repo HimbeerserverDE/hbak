@@ -29,7 +29,7 @@ enum Commands {
         /// The name of the subvolume to unmark as owned.
         subvol: String,
     },
-    /// Add a remote to push subvolumes to.
+    /// Add or modify a remote to push subvolumes to.
     AddPush {
         /// The network address and port of the node to push to.
         address: String,
@@ -56,6 +56,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
         Commands::Track { subvol } => {
             let mut node_config = NodeConfig::load()?;
 
+            node_config.subvols.retain(|item| *item != subvol);
             node_config.subvols.push(subvol);
             node_config.save()?;
         }
@@ -72,6 +73,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
         } => {
             let mut node_config = NodeConfig::load()?;
 
+            node_config.push.retain(|item| item.address != address);
             node_config.push.push(RemoteNode {
                 address,
                 secret,
