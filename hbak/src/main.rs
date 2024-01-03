@@ -29,7 +29,7 @@ enum Commands {
         /// The name of the subvolume to unmark as owned.
         subvol: String,
     },
-    /// Add or modify a remote to push subvolumes to.
+    /// Add or modify a remote to push volumes to.
     AddPush {
         /// The network address and port of the node to push to.
         address: String,
