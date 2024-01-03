@@ -1,4 +1,4 @@
-use hbak_common::config::NodeConfig;
+use hbak_common::config::{NodeConfig, RemoteNode};
 use hbak_common::system;
 
 use clap::{Parser, Subcommand};
@@ -29,6 +29,20 @@ enum Commands {
         /// The name of the subvolume to unmark as owned.
         subvol: String,
     },
+    /// Add a remote to push subvolumes to.
+    AddPush {
+        /// The network address and port of the node to push to.
+        address: String,
+        /// The shared secret for mutual authentication.
+        secret: String,
+        /// The volumes to push to the remote node.
+        volumes: Vec<String>,
+    },
+    /// Remove a push remote without deleting anything.
+    RmPush {
+        /// The network address and port of the node to forget.
+        address: String,
+    },
 }
 
 fn main() -> Result<(), hbak_common::LocalNodeError> {
@@ -49,6 +63,26 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             let mut node_config = NodeConfig::load()?;
 
             node_config.subvols.retain(|item| *item != subvol);
+            node_config.save()?;
+        }
+        Commands::AddPush {
+            address,
+            secret,
+            volumes,
+        } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.push.push(RemoteNode {
+                address,
+                secret,
+                volumes,
+            });
+            node_config.save()?;
+        }
+        Commands::RmPush { address } => {
+            let mut node_config = NodeConfig::load()?;
+
+            node_config.push.retain(|item| item.address != address);
             node_config.save()?;
         }
     }
