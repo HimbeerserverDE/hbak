@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
+sys-mount = { version = "2.1.0", default-features = false }
 thiserror = "1.0"
 toml = "0.8.8"

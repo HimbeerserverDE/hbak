@@ -62,6 +62,12 @@ pub enum VolumeParseError {
 /// A `LocalNodeError` indicates an error condition on the current node.
 #[derive(Debug, Error)]
 pub enum LocalNodeError {
+    /// A btrfs command failed to execute correctly.
+    #[error("Btrfs command execution failed")]
+    BtrfsCmd,
+    /// A configuration file already exists on this node.
+    #[error("Local node is already initialized")]
+    ConfigExists,
     /// The specified subvolume does not exist on this node.
     #[error("Subvolume \"{0}\" does not exist")]
     NoSuchSubvolume(String),

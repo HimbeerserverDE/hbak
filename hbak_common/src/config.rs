@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 /// as well as authentication and encryption secrets.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {
+    /// The device file the local btrfs file system is located at.
+    pub device: String,
     /// The name of the [`Node`].
     pub node_name: String,
     /// The subvolumes owned by the [`Node`], i.e. the subvolumes
@@ -34,7 +36,7 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    const PATH: &str = "/etc/hbak.conf";
+    pub const PATH: &str = "/etc/hbak.conf";
 
     /// Loads the configuration file of the current machine.
     pub fn load() -> Result<Self, LocalNodeError> {
