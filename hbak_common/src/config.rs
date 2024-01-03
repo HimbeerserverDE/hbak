@@ -40,6 +40,13 @@ impl NodeConfig {
         let s = fs::read_to_string(Self::PATH)?;
         Ok(toml::from_str(&s)?)
     }
+
+    pub fn save(&self) -> Result<(), LocalNodeError> {
+        let s = toml::to_string_pretty(self)?;
+        fs::write(Self::PATH, s)?;
+
+        Ok(())
+    }
 }
 
 /// A `RemoteNode` defines a network node that can be interacted with.

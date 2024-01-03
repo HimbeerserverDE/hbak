@@ -70,6 +70,9 @@ pub enum LocalNodeError {
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
 
+    /// A `toml::ser::Error` TOML serialization error occured.
+    #[error("TOML serialization error: {0}")]
+    TomlSer(#[from] toml::ser::Error),
     /// A `toml::de::Error` TOML deserialization error occured.
     #[error("TOML deserialization error: {0}")]
     TomlDe(#[from] toml::de::Error),
