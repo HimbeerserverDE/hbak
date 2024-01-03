@@ -18,8 +18,6 @@ enum Commands {
         device: String,
         /// The name to use for this node.
         node_name: String,
-        /// The encryption passphrase to use for owned subvolumes.
-        passphrase: String,
     },
     /// Mark a subvolume as owned by the local node.
     Track {
@@ -37,11 +35,8 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init {
-            device,
-            node_name,
-            passphrase,
-        } => {
+        Commands::Init { device, node_name } => {
+            let passphrase = rpassword::prompt_password("Enter new encryption password: ")?;
             system::init(device, node_name, passphrase)?;
         }
         Commands::Track { subvol } => {
