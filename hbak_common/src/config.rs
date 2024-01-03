@@ -1,6 +1,8 @@
 use crate::LocalNodeError;
 
-use std::fs;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use serde::{Deserialize, Serialize};
 
@@ -40,15 +42,32 @@ impl NodeConfig {
 
     /// Loads the configuration file of the current machine.
     pub fn load() -> Result<Self, LocalNodeError> {
-        let s = fs::read_to_string(Self::PATH)?;
+        let mut f = File::open(Self::PATH)?;
+
+        if f.metadata()?.permissions().mode() & 0o7077 > 0 {
+            return Err(LocalNodeError::InsecurePerms);
+        }
+
+        let mut s = String::new();
+        f.read_to_string(&mut s)?;
+
         Ok(toml::from_str(&s)?)
     }
 
     /// Saves the configuration to the configuration file on the current machine.
     pub fn save(&self) -> Result<(), LocalNodeError> {
         let s = toml::to_string_pretty(self)?;
-        fs::write(Self::PATH, s)?;
 
+        let mut f = OpenOptions::new()
+            .create(true)
+            .read(false)
+            .write(true)
+            .append(false)
+            .truncate(true)
+            .mode(0o0600)
+            .open(Self::PATH)?;
+
+        write!(f, "{}", s)?;
         Ok(())
     }
 }
