@@ -80,7 +80,7 @@ impl NodeConfig {
 ///
 /// * Push: The volumes to push to the remote node.
 /// * Pull: The volumes to pull from the remote node,
-///         must not include snapshots owned by the local node.
+///         must not include subvolumes owned by the local node.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RemoteNode {
     /// The network address and port of the node to push to.
