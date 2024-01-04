@@ -70,6 +70,18 @@ enum Commands {
         #[arg(long = "pull")]
         pull: Vec<String>,
     },
+    /// Modify permissions for a remote client without changing the passphrase.
+    SetPerms {
+        /// The name of the remote node to apply the information to.
+        node_name: String,
+        /// The volumes the remote node is allowed to push.
+        /// Subvolumes owned by the local node are silently ignored.
+        #[arg(long = "push")]
+        push: Vec<String>,
+        /// The volumes the remote node is allowed to pull.
+        #[arg(long = "pull")]
+        pull: Vec<String>,
+    },
     /// Revoke a remote client all access and delete local configuration about it.
     Revoke {
         /// The name of the remote node to remove from the security configuration.
@@ -162,6 +174,28 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
                 push,
                 pull,
             });
+            node_config.save()?;
+        }
+        Commands::SetPerms {
+            node_name,
+            mut push,
+            pull,
+        } => {
+            let local_node = LocalNode::new()?;
+
+            push.retain(|subvol| !local_node.owns_subvol(subvol));
+
+            let mut node_config = NodeConfig::load()?;
+
+            for item in &mut node_config.auth {
+                if item.node_name == node_name {
+                    item.push = push;
+                    item.pull = pull;
+
+                    break;
+                }
+            }
+
             node_config.save()?;
         }
         Commands::Revoke { node_name } => {
