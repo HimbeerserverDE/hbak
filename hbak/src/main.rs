@@ -3,6 +3,9 @@ use hbak_common::proto::LocalNode;
 use hbak_common::system;
 
 use clap::{Parser, Subcommand};
+use hmac::{Hmac, Mac};
+use rand::Rng;
+use sha2::Sha256;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -79,7 +82,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
     match cli.command {
         Commands::Init { device, node_name } => {
-            let passphrase = rpassword::prompt_password("Enter new encryption password: ")?;
+            let passphrase = rpassword::prompt_password("Enter new encryption passphrase: ")?;
             system::init(device, node_name, passphrase)?;
         }
         Commands::Track { subvol } => {
@@ -96,16 +99,10 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.save()?;
         }
         Commands::AddPush { address, volumes } => {
-            let secret = rpassword::prompt_password("Enter shared secret: ")?;
-
             let mut node_config = NodeConfig::load()?;
 
             node_config.push.retain(|item| item.address != address);
-            node_config.push.push(RemoteNode {
-                address,
-                secret,
-                volumes,
-            });
+            node_config.push.push(RemoteNode { address, volumes });
             node_config.save()?;
         }
         Commands::RmPush { address } => {
@@ -122,16 +119,10 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
             volumes.retain(|subvol| !local_node.owns_subvol(subvol));
 
-            let secret = rpassword::prompt_password("Enter shared secret: ")?;
-
             let mut node_config = NodeConfig::load()?;
 
             node_config.pull.retain(|item| item.address != address);
-            node_config.pull.push(RemoteNode {
-                address,
-                secret,
-                volumes,
-            });
+            node_config.pull.push(RemoteNode { address, volumes });
             node_config.save()?;
         }
         Commands::RmPull { address } => {
@@ -149,14 +140,23 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
             push.retain(|subvol| !local_node.owns_subvol(subvol));
 
-            let secret = rpassword::prompt_password("Enter shared secret: ")?;
+            let secret = rpassword::prompt_password("Enter remote node encryption passphrase: ")?;
+            let verifier: Vec<u8> = rand::thread_rng()
+                .sample_iter(&rand::distributions::Standard)
+                .take(32)
+                .collect();
+            let mut mac: Hmac<Sha256> =
+                Hmac::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+            mac.update(&verifier);
+            let hmac = mac.finalize();
 
             let mut node_config = NodeConfig::load()?;
 
             node_config.auth.retain(|item| item.node_name != node_name);
             node_config.auth.push(RemoteNodeAuth {
                 node_name,
-                secret,
+                verifier,
+                hmac: hmac.into_bytes().to_vec(),
                 push,
                 pull,
             });
