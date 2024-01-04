@@ -1,19 +1,20 @@
 use crate::config::NodeConfig;
+use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
-use std::fmt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::{fmt, fs};
 
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use sys_mount::{Mount, UnmountFlags};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
 pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 
 /// A `Snapshot` uniquely identifies a full or incremental btrfs snapshot
 /// of a node via the node name, subvolume name and creation date.
-///
-/// To construct this type, use [`Volume::snapshot_now`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
     node_name: String,
@@ -216,6 +217,49 @@ impl LocalNode {
     /// Reports whether the `LocalNode` is the origin of the specified subvolume.
     pub fn owns_subvol(&self, subvol: &String) -> bool {
         self.config.subvols.contains(subvol)
+    }
+
+    /// Creates a new btrfs snapshot of the specified subvolume.
+    pub fn snapshot_now(
+        &self,
+        subvol: String,
+        is_incremental: bool,
+    ) -> Result<Snapshot, LocalNodeError> {
+        if !self.owns_subvol(&subvol) {
+            return Err(LocalNodeError::ForeignSubvolume(subvol));
+        }
+
+        fs::create_dir_all(MOUNTPOINT)?;
+
+        let _btrfs = Mount::builder().data("compress=zstd").mount_autodrop(
+            self.config.device.clone(),
+            MOUNTPOINT,
+            UnmountFlags::DETACH,
+        );
+
+        let src = Path::new(MOUNTPOINT).join(&subvol);
+        let snapshot = Snapshot {
+            node_name: self.name().to_string(),
+            subvol,
+            is_incremental,
+            taken: Utc::now().naive_utc(),
+        };
+        let dst = Path::new(SNAPSHOT_DIR).join(snapshot.snapshot_path());
+
+        if !Command::new("btrfs")
+            .arg("subvolume")
+            .arg("snapshot")
+            .arg("-r")
+            .arg(src)
+            .arg(dst)
+            .spawn()?
+            .wait()?
+            .success()
+        {
+            return Err(LocalNodeError::BtrfsCmd);
+        }
+
+        Ok(snapshot)
     }
 }
 

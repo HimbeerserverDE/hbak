@@ -71,6 +71,10 @@ pub enum LocalNodeError {
     /// The permissions on the configuration file are insecure.
     #[error("Insecure config permissions (limit access to root user!)")]
     InsecurePerms,
+
+    /// The specified subvolume is not owned by this node.
+    #[error("Subvolume \"{0}\" is not owned by this node")]
+    ForeignSubvolume(String),
     /// The specified subvolume does not exist on this node.
     #[error("Subvolume \"{0}\" does not exist")]
     NoSuchSubvolume(String),
