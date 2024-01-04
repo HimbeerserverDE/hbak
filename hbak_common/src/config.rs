@@ -85,8 +85,6 @@ impl NodeConfig {
 pub struct RemoteNode {
     /// The network address and port of the node to push to.
     pub address: String,
-    /// The shared secret for mutual authentication.
-    pub secret: String,
     /// The volumes to interact with, see above for details.
     pub volumes: Vec<String>,
 }
@@ -97,8 +95,10 @@ pub struct RemoteNode {
 pub struct RemoteNodeAuth {
     /// The name of the remote node to apply the details to.
     pub node_name: String,
-    /// The shared secret for mutual authentication.
-    pub secret: String,
+    /// A random value used by the remote node to compute the HMAC shared secret.
+    pub verifier: Vec<u8>,
+    /// The HMAC hash of verifier and passphrase for mutual authentication.
+    pub hmac: Vec<u8>,
     /// The volumes the remote node is allowed to push.
     /// Must not include subvolumes owned by the local node.
     pub push: Vec<String>,

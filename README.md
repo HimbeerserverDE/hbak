@@ -19,7 +19,10 @@ All backups will be encrypted before leaving the host they originated from.
 The nodes will also transmit encrypted metadata to handle multi-host setups,
 timestamps and storage locations.
 
-Nodes will mutually authenticate using pre-shared secrets.
+Nodes will mutually authenticate using an HMAC-derived symmetric key
+that the authenticator already knows and that can be computed by the
+client if it's sent a stored random value from the authenticator
+and knows the password.
 
 The backups themselves will be btrfs snapshots with some being fully exported
 and others being incremental with respect to the latest full backup at the time
