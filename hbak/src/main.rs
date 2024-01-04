@@ -75,6 +75,8 @@ enum Commands {
         /// The name of the remote node to remove from the security configuration.
         node_name: String,
     },
+    /// Generate verifier and HMAC hash from a passphrase.
+    HashPassphrase,
 }
 
 fn main() -> Result<(), hbak_common::LocalNodeError> {
@@ -167,6 +169,20 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
             node_config.auth.retain(|item| item.node_name != node_name);
             node_config.save()?;
+        }
+        Commands::HashPassphrase => {
+            let secret = rpassword::prompt_password("Enter passphrase: ")?;
+            let verifier: Vec<u8> = rand::thread_rng()
+                .sample_iter(&rand::distributions::Standard)
+                .take(32)
+                .collect();
+            let mut mac: Hmac<Sha256> =
+                Hmac::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+            mac.update(&verifier);
+            let hmac = mac.finalize();
+
+            println!("Verifier: {:?}", verifier);
+            println!("HMAC:     {:?}", hmac.into_bytes());
         }
     }
 
