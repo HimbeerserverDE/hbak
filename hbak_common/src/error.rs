@@ -72,6 +72,13 @@ pub enum LocalNodeError {
     #[error("Insecure config permissions (limit access to root user!)")]
     InsecurePerms,
 
+    /// No full snapshot of the specified subvolume could be found on this node.
+    #[error("No full snapshots of subvolume \"{0}\" exist")]
+    NoFullSnapshot(String),
+    /// There was a failure parsing a `Snapshot`.
+    #[error("Failed to parse snapshot identifier")]
+    SnapshotParseError(#[from] SnapshotParseError),
+
     /// The specified subvolume is not owned by this node.
     #[error("Subvolume \"{0}\" is not owned by this node")]
     ForeignSubvolume(String),

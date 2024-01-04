@@ -261,6 +261,31 @@ impl LocalNode {
 
         Ok(snapshot)
     }
+
+    /// Returns all snapshots of the specified subvolume of this node.
+    pub fn all_snapshots(&self, subvol: String) -> Result<Vec<Snapshot>, LocalNodeError> {
+        if !self.owns_subvol(&subvol) {
+            return Err(LocalNodeError::ForeignSubvolume(subvol));
+        }
+
+        let snapshots = fs::read_dir(SNAPSHOT_DIR)?;
+        let mut all_snapshots = Vec::new();
+        for snapshot in snapshots {
+            all_snapshots.push(Snapshot::try_from(&*snapshot?.path())?);
+        }
+
+        Ok(all_snapshots)
+    }
+
+    /// Returns the latest full snapshot of the specified subvolume of this node.
+    pub fn latest_snapshot_full(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
+        Ok(self
+            .all_snapshots(subvol)?
+            .into_iter()
+            .filter(|snapshot| !snapshot.is_incremental())
+            .max_by_key(|snapshot| snapshot.taken())
+            .ok_or(LocalNodeError::NoFullSnapshot(subvol))?)
+    }
 }
 
 impl Node for LocalNode {
