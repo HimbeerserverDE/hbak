@@ -279,12 +279,11 @@ impl LocalNode {
 
     /// Returns the latest full snapshot of the specified subvolume of this node.
     pub fn latest_snapshot_full(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
-        Ok(self
-            .all_snapshots(subvol)?
+        self.all_snapshots(subvol.clone())?
             .into_iter()
             .filter(|snapshot| !snapshot.is_incremental())
             .max_by_key(|snapshot| snapshot.taken())
-            .ok_or(LocalNodeError::NoFullSnapshot(subvol))?)
+            .ok_or(LocalNodeError::NoFullSnapshot(subvol))
     }
 }
 
