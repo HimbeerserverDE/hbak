@@ -14,7 +14,7 @@ use chacha20poly1305::{ChaChaPoly1305, Key};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use sys_mount::{Mount, UnmountFlags};
+use sys_mount::{Mount, UnmountDrop, UnmountFlags};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
 pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
@@ -207,16 +207,24 @@ impl From<String> for AnyNode {
 }
 
 /// A `LocalNode` represents the current machine.
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalNode {
     config: NodeConfig,
+    _btrfs: UnmountDrop<Mount>,
 }
 
 impl LocalNode {
     /// Returns a new `LocalNode` representing the local machine.
     pub fn new() -> Result<Self, LocalNodeError> {
+        let config = NodeConfig::load()?;
+        let device = config.device.clone();
+
         Ok(Self {
-            config: NodeConfig::load()?,
+            config,
+            _btrfs: Mount::builder().data("compress=zstd").mount_autodrop(
+                device,
+                MOUNTPOINT,
+                UnmountFlags::DETACH,
+            )?,
         })
     }
 
@@ -236,12 +244,6 @@ impl LocalNode {
         }
 
         fs::create_dir_all(MOUNTPOINT)?;
-
-        let _btrfs = Mount::builder().data("compress=zstd").mount_autodrop(
-            self.config.device.clone(),
-            MOUNTPOINT,
-            UnmountFlags::DETACH,
-        );
 
         let src = Path::new(MOUNTPOINT).join(&subvol);
         let snapshot = Snapshot {
@@ -334,3 +336,11 @@ impl fmt::Display for LocalNode {
         write!(f, "{}", self.name())
     }
 }
+
+impl PartialEq for LocalNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.config.node_name == other.config.node_name
+    }
+}
+
+impl Eq for LocalNode {}

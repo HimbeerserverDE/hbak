@@ -7,7 +7,7 @@ use chacha20poly1305::aead::stream::EncryptorBE32;
 use chacha20poly1305::XChaCha20Poly1305;
 
 /// The size of data chunks to encrypt or decrypt at a time in bytes.
-pub const CHUNKSIZE: usize = 128 * 1024 * 1024;
+pub const CHUNKSIZE: usize = 4096;
 
 /// A `SnapshotStream` is a wrapper around a btrfs stream
 /// that maps the stream to an encrypted version preceeded by the nonce.
@@ -51,34 +51,34 @@ impl<B: BufRead> SnapshotStream<B> {
             n += 1;
         }
 
-        // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-        while self.inner.fill_buf().map(|b| !b.is_empty())? {
+        while let Some(byte) = self.buf.pop_front() {
             if n >= buf.len() {
                 break;
             }
 
-            if let Some(byte) = self.buf.pop_front() {
-                buf[n] = byte;
-                n += 1;
-            } else {
-                let mut chunk = [0; CHUNKSIZE];
-                let n = self.inner.read(&mut chunk)?;
-                let chunk = &chunk[..n];
+            buf[n] = byte;
+            n += 1;
+        }
 
-                // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-                if self.inner.fill_buf().map(|b| !b.is_empty())? {
-                    self.buf.extend(
-                        self.cipher
-                            .as_mut()
-                            .unwrap()
-                            .encrypt_next(chunk)?
-                            .into_iter(),
-                    );
-                } else {
-                    self.buf
-                        .extend(self.cipher.take().unwrap().encrypt_last(chunk)?.into_iter());
-                    break;
-                }
+        // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
+        while self.inner.fill_buf().map(|b| !b.is_empty())? {
+            let mut chunk = [0; CHUNKSIZE];
+            let n = self.inner.read(&mut chunk)?;
+            let chunk = &chunk[..n];
+
+            // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
+            if self.inner.fill_buf().map(|b| !b.is_empty())? {
+                self.buf.extend(
+                    self.cipher
+                        .as_mut()
+                        .unwrap()
+                        .encrypt_next(chunk)?
+                        .into_iter(),
+                );
+            } else {
+                self.buf
+                    .extend(self.cipher.take().unwrap().encrypt_last(chunk)?.into_iter());
+                break;
             }
         }
 
