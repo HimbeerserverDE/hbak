@@ -3,6 +3,7 @@ use crate::stream::SnapshotStream;
 use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
@@ -296,7 +297,7 @@ impl LocalNode {
     pub fn export_full(
         &self,
         subvol: String,
-    ) -> Result<SnapshotStream<ChildStdout>, LocalNodeError> {
+    ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
         let src = Path::new(SNAPSHOT_DIR).join(self.latest_snapshot_full(subvol)?.snapshot_path());
         let cmd = Command::new("btrfs")
             .arg("send")
@@ -313,11 +314,11 @@ impl LocalNode {
         );
         let key = Key::from_slice(&key_array);
 
-        Ok(SnapshotStream {
-            inner: cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?,
-            cipher: EncryptorBE32::new(key, &nonce),
-            header: nonce.to_vec(),
-        })
+        Ok(SnapshotStream::new(
+            BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
+            EncryptorBE32::new(key, &nonce),
+            nonce.to_vec(),
+        ))
     }
 }
 
