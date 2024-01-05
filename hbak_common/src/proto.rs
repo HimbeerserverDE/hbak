@@ -252,7 +252,7 @@ impl LocalNode {
             is_incremental,
             taken: Utc::now().naive_utc(),
         };
-        let dst = Path::new(SNAPSHOT_DIR).join(snapshot.snapshot_path());
+        let dst = snapshot.snapshot_path();
 
         if !Command::new("btrfs")
             .arg("subvolume")
@@ -300,7 +300,7 @@ impl LocalNode {
         &self,
         subvol: String,
     ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
-        let src = Path::new(SNAPSHOT_DIR).join(self.latest_snapshot_full(subvol)?.snapshot_path());
+        let src = self.latest_snapshot_full(subvol)?.snapshot_path();
         let cmd = Command::new("btrfs")
             .arg("send")
             .arg("--compressed-data")
