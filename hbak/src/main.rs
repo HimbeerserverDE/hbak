@@ -89,7 +89,6 @@ enum Commands {
     },
     /// Generate verifier and HMAC hash from a passphrase.
     HashPassphrase,
-    Dbg,
 }
 
 fn main() -> Result<(), hbak_common::LocalNodeError> {
@@ -218,12 +217,6 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
             println!("Verifier: {:?}", verifier);
             println!("HMAC:     {:?}", hmac.into_bytes());
-        }
-        Commands::Dbg => {
-            let mut tmp = std::fs::File::create("/tmp/hbak_test.enc")?;
-            LocalNode::new()?
-                .export_full("hbak_test".to_string())?
-                .write_to(&mut tmp)?;
         }
     }
 
