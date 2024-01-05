@@ -1,13 +1,18 @@
 use crate::config::NodeConfig;
+use crate::stream::SnapshotStream;
 use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
 
+use chacha20::XChaCha20;
+use chacha20poly1305::aead::{consts::U19, stream::EncryptorBE32, AeadCore, OsRng};
+use chacha20poly1305::{ChaChaPoly1305, Key};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use sys_mount::{Mount, UnmountFlags};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
@@ -284,6 +289,35 @@ impl LocalNode {
             .filter(|snapshot| !snapshot.is_incremental())
             .max_by_key(|snapshot| snapshot.taken())
             .ok_or(LocalNodeError::NoFullSnapshot(subvol))
+    }
+
+    /// Returns a new [`crate::stream::SnapshotStream`]
+    /// wrapping the latest full snapshot of the specified subvolume.
+    pub fn export_full(
+        &self,
+        subvol: String,
+    ) -> Result<SnapshotStream<ChildStdout>, LocalNodeError> {
+        let src = Path::new(SNAPSHOT_DIR).join(self.latest_snapshot_full(subvol)?.snapshot_path());
+        let cmd = Command::new("btrfs")
+            .arg("send")
+            .arg("--compressed-data")
+            .arg(src)
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        let nonce = ChaChaPoly1305::<XChaCha20, U19>::generate_nonce(&mut OsRng);
+        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(
+            self.config.passphrase.as_bytes(),
+            &nonce,
+            600000,
+        );
+        let key = Key::from_slice(&key_array);
+
+        Ok(SnapshotStream {
+            inner: cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?,
+            cipher: EncryptorBE32::new(key, &nonce),
+            header: nonce.to_vec(),
+        })
     }
 }
 

@@ -65,6 +65,10 @@ pub enum LocalNodeError {
     /// A btrfs command failed to execute correctly.
     #[error("Btrfs command execution failed")]
     BtrfsCmd,
+    /// A btrfs command did not provide a stdout file.
+    #[error("Btrfs command does not have stdout")]
+    NoBtrfsOutput,
+
     /// A configuration file already exists on this node.
     #[error("Local node is already initialized")]
     ConfigExists,
