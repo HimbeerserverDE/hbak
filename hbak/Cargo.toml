@@ -8,7 +8,4 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.4.12", features = ["derive"] }
 hbak_common = { version = "0.1.0-dev", path = "../hbak_common" }
-hmac = "0.12.1"
-rand = "0.8.5"
 rpassword = "7.3.1"
-sha2 = "0.10.8"

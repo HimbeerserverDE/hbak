@@ -3,9 +3,6 @@ use hbak_common::proto::LocalNode;
 use hbak_common::system;
 
 use clap::{Parser, Subcommand};
-use hmac::{Hmac, Mac};
-use rand::Rng;
-use sha2::Sha256;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -87,8 +84,8 @@ enum Commands {
         /// The name of the remote node to remove from the security configuration.
         node_name: String,
     },
-    /// Generate verifier and HMAC hash from a passphrase.
-    HashPassphrase,
+    /// Export a random verifier and HMAC hash of the local encryption passphrase.
+    ExportPass,
 }
 
 fn main() -> Result<(), hbak_common::LocalNodeError> {
@@ -155,14 +152,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             push.retain(|subvol| !local_node.owns_subvol(subvol));
 
             let secret = rpassword::prompt_password("Enter remote node encryption passphrase: ")?;
-            let verifier: Vec<u8> = rand::thread_rng()
-                .sample_iter(&rand::distributions::Standard)
-                .take(32)
-                .collect();
-            let mut mac: Hmac<Sha256> =
-                Hmac::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
-            mac.update(&verifier);
-            let hmac = mac.finalize();
+            let (verifier, hmac) = hbak_common::hash_passphrase(secret)?;
 
             let mut node_config = NodeConfig::load()?;
 
@@ -170,7 +160,7 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.auth.push(RemoteNodeAuth {
                 node_name,
                 verifier,
-                hmac: hmac.into_bytes().to_vec(),
+                hmac,
                 push,
                 pull,
             });
@@ -204,19 +194,12 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             node_config.auth.retain(|item| item.node_name != node_name);
             node_config.save()?;
         }
-        Commands::HashPassphrase => {
-            let secret = rpassword::prompt_password("Enter passphrase: ")?;
-            let verifier: Vec<u8> = rand::thread_rng()
-                .sample_iter(&rand::distributions::Standard)
-                .take(32)
-                .collect();
-            let mut mac: Hmac<Sha256> =
-                Hmac::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
-            mac.update(&verifier);
-            let hmac = mac.finalize();
+        Commands::ExportPass => {
+            let node_config = NodeConfig::load()?;
+            let (verifier, hmac) = hbak_common::hash_passphrase(node_config.passphrase)?;
 
             println!("Verifier: {:?}", verifier);
-            println!("HMAC:     {:?}", hmac.into_bytes());
+            println!("HMAC:     {:?}", hmac);
         }
     }
 

@@ -108,6 +108,9 @@ pub enum LocalNodeError {
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
 
+    /// Password-based key derivation using Argon2id failed.
+    #[error("Password-based key derivation using Argon2id failed: {0}")]
+    Argon2(#[from] argon2::Error),
     /// The encryption or decryption of some data failed.
     #[error("Encryption or decryption failure")]
     ChaCha20Poly1305(#[from] chacha20poly1305::Error),

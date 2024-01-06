@@ -315,10 +315,10 @@ impl LocalNode {
             .stdout(Stdio::piped())
             .spawn()?;
 
-        Ok(SnapshotStream::new(
+        SnapshotStream::new(
             BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
             &self.config.passphrase,
-        ))
+        )
     }
 
     /// Writes the provided [`crate::stream::SnapshotStream`]

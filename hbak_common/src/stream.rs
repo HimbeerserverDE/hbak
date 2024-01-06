@@ -3,13 +3,13 @@ use crate::LocalNodeError;
 use std::collections::VecDeque;
 use std::io::{BufRead, Write};
 
+use argon2::Argon2;
 use chacha20::XChaCha20;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::consts::U19;
 use chacha20poly1305::{AeadCore, ChaChaPoly1305, Key, XChaCha20Poly1305};
-use sha2::Sha256;
 
 /// The size of data chunks to encrypt or decrypt at a time in bytes.
 pub const CHUNKSIZE: usize = 4096;
@@ -29,19 +29,24 @@ pub struct SnapshotStream<B: BufRead> {
 }
 
 impl<B: BufRead> SnapshotStream<B> {
-    pub(crate) fn new<P: AsRef<[u8]>>(inner: B, passphrase: P) -> Self {
+    pub(crate) fn new<P: AsRef<[u8]>>(inner: B, passphrase: P) -> Result<Self, LocalNodeError> {
         let nonce = ChaChaPoly1305::<XChaCha20, U19>::generate_nonce(&mut OsRng);
-        let key_array =
-            pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(passphrase.as_ref(), &nonce, 600000);
+        let mut key_array = [0; 32];
+        Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::default(),
+            argon2::Params::new(524288, 10, 4, Some(32))?,
+        )
+        .hash_password_into(passphrase.as_ref(), &nonce, &mut key_array)?;
         let key = Key::from_slice(&key_array);
         let cipher = EncryptorBE32::new(key, &nonce);
 
-        Self {
+        Ok(Self {
             inner,
             cipher: Some(cipher),
             header: nonce.to_vec().into(),
             buf: VecDeque::new(),
-        }
+        })
     }
 
     /// Reads ciphertext from the `SnapshotStream`.
@@ -129,7 +134,13 @@ impl<B: BufRead> RecoveryStream<B> {
         inner.read_exact(&mut nonce_buf)?;
 
         let nonce = GenericArray::from_slice(&nonce_buf);
-        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(passphrase.as_ref(), nonce, 600000);
+        let mut key_array = [0; 32];
+        Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::default(),
+            argon2::Params::new(524288, 10, 4, Some(32))?,
+        )
+        .hash_password_into(passphrase.as_ref(), nonce, &mut key_array)?;
         let key = Key::from_slice(&key_array);
         let cipher = DecryptorBE32::new(key, nonce);
 
