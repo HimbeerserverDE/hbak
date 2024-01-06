@@ -215,6 +215,8 @@ impl LocalNode {
         let config = NodeConfig::load()?;
         let device = config.device.clone();
 
+        fs::create_dir_all(MOUNTPOINT)?;
+
         Ok(Self {
             config,
             _btrfs: Mount::builder().data("compress=zstd").mount_autodrop(
@@ -245,8 +247,6 @@ impl LocalNode {
         if !self.owns_subvol(&subvol) {
             return Err(LocalNodeError::ForeignSubvolume(subvol));
         }
-
-        fs::create_dir_all(MOUNTPOINT)?;
 
         let src = Path::new(MOUNTPOINT).join(&subvol);
         let snapshot = Snapshot {
