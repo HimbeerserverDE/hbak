@@ -378,7 +378,10 @@ impl LocalNode {
             .stdin(Stdio::piped())
             .spawn()?;
 
-        stream.write_to(cmd.stdin.as_mut().ok_or(LocalNodeError::NoBtrfsInput)?)?;
+        if let Err(e) = stream.write_to(cmd.stdin.as_mut().ok_or(LocalNodeError::NoBtrfsInput)?) {
+            cmd.kill()?;
+            return Err(e);
+        }
         cmd.stdin = None; // Make sure `btrfs receive` doesn't deadlock.
 
         if cmd.wait()?.success() {
