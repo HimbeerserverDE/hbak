@@ -59,15 +59,6 @@ impl<B: BufRead> SnapshotStream<B> {
             n += 1;
         }
 
-        while let Some(byte) = self.buf.pop_front() {
-            if n >= buf.len() {
-                break;
-            }
-
-            buf[n] = byte;
-            n += 1;
-        }
-
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
             let mut chunk = [0; CHUNKSIZE];
@@ -88,6 +79,15 @@ impl<B: BufRead> SnapshotStream<B> {
                     .extend(self.cipher.take().unwrap().encrypt_last(chunk)?.into_iter());
                 break;
             }
+        }
+
+        while let Some(byte) = self.buf.pop_front() {
+            if n >= buf.len() {
+                break;
+            }
+
+            buf[n] = byte;
+            n += 1;
         }
 
         Ok(n)
