@@ -150,9 +150,12 @@ fn main() -> Result<()> {
             mut push,
             pull,
         } => {
-            let local_node = LocalNode::new()?;
+            // Unmount the btrfs before potentially getting killed at prompts.
+            {
+                let local_node = LocalNode::new()?;
 
-            push.retain(|subvol| !local_node.owns_subvol(subvol));
+                push.retain(|subvol| !local_node.owns_subvol(subvol));
+            }
 
             println!("Use the passphrase export results from the remote node below.");
             let verifier_hex = rpassword::prompt_password("Enter verifier: ")?;
