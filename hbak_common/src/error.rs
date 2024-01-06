@@ -1,3 +1,5 @@
+use crate::proto::Snapshot;
+
 use std::io;
 
 use thiserror::Error;
@@ -85,6 +87,12 @@ pub enum LocalNodeError {
     /// No full snapshot of the specified subvolume could be found on this node.
     #[error("No full snapshots of subvolume \"{0}\" exist")]
     NoFullSnapshot(String),
+    /// A snapshot with the same identifier already exists.
+    #[error("A snapshot with identifier \"{0}\" already exists")]
+    SnapshotExists(Snapshot),
+    /// The snapshot cannot be restored to because it already exists.
+    #[error("Cannot restore existing snapshot \"{0}\" from backup")]
+    SnapshotNotGone(Snapshot),
     /// There was a failure parsing a `Snapshot`.
     #[error("Failed to parse snapshot identifier")]
     SnapshotParseError(#[from] SnapshotParseError),

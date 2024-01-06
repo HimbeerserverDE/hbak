@@ -257,6 +257,10 @@ impl LocalNode {
         };
         let dst = snapshot.snapshot_path();
 
+        if dst.exists() {
+            return Err(LocalNodeError::SnapshotExists(snapshot));
+        }
+
         if !Command::new("btrfs")
             .arg("subvolume")
             .arg("snapshot")
@@ -362,7 +366,12 @@ impl LocalNode {
         &self,
         subvol: String,
     ) -> Result<RecoveryStream<BufReader<File>>, LocalNodeError> {
-        let src = self.latest_backup_full(subvol)?.backup_path();
+        let backup = self.latest_backup_full(subvol)?;
+        if backup.snapshot_path().exists() {
+            return Err(LocalNodeError::SnapshotNotGone(backup));
+        }
+
+        let src = backup.backup_path();
         let file = BufReader::new(File::open(src)?);
 
         RecoveryStream::new(file, &self.config.passphrase)
