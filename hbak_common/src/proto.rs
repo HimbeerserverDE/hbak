@@ -4,7 +4,7 @@ use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
@@ -315,6 +315,20 @@ impl LocalNode {
             BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
             &self.config.passphrase,
         ))
+    }
+
+    /// Writes the provided [`crate::stream::SnapshotStream`]
+    /// to the specified local backup.
+    pub fn backup<B: BufRead>(
+        &self,
+        stream: SnapshotStream<B>,
+        snapshot: &Snapshot,
+    ) -> Result<(), LocalNodeError> {
+        let dst = snapshot.backup_path();
+        let mut file = BufWriter::new(File::create(dst)?);
+
+        stream.write_to(&mut file)?;
+        Ok(())
     }
 
     /// Returns all backups of the specified subvolume
