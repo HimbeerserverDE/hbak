@@ -4,20 +4,13 @@ use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
 
-use chacha20::XChaCha20;
-use chacha20poly1305::aead::generic_array::GenericArray;
-use chacha20poly1305::aead::stream::EncryptorBE32;
-use chacha20poly1305::aead::{AeadCore, OsRng};
-use chacha20poly1305::consts::U19;
-use chacha20poly1305::{ChaChaPoly1305, Key};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use sys_mount::{Mount, UnmountDrop, UnmountFlags};
 
 pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
@@ -318,18 +311,9 @@ impl LocalNode {
             .stdout(Stdio::piped())
             .spawn()?;
 
-        let nonce = ChaChaPoly1305::<XChaCha20, U19>::generate_nonce(&mut OsRng);
-        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(
-            self.config.passphrase.as_bytes(),
-            &nonce,
-            600000,
-        );
-        let key = Key::from_slice(&key_array);
-
         Ok(SnapshotStream::new(
             BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
-            EncryptorBE32::new(key, &nonce),
-            nonce.to_vec(),
+            &self.config.passphrase,
         ))
     }
 
@@ -365,20 +349,9 @@ impl LocalNode {
         subvol: String,
     ) -> Result<RecoveryStream<BufReader<File>>, LocalNodeError> {
         let src = self.latest_backup_full(subvol)?.backup_path();
-        let mut file = BufReader::new(File::open(src)?);
+        let file = BufReader::new(File::open(src)?);
 
-        let mut nonce_buf = [0; 19];
-        file.read_exact(&mut nonce_buf)?;
-
-        let nonce = GenericArray::from_slice(&nonce_buf);
-        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(
-            self.config.passphrase.as_bytes(),
-            nonce,
-            600000,
-        );
-        let key = Key::from_slice(&key_array);
-
-        RecoveryStream::new(file, key, nonce)
+        RecoveryStream::new(file, &self.config.passphrase)
     }
 
     /// Writes the provided [`crate::stream::RecoveryStream`]

@@ -3,37 +3,43 @@ use crate::LocalNodeError;
 use std::collections::VecDeque;
 use std::io::{BufRead, Write};
 
+use chacha20::XChaCha20;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
+use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::consts::U19;
-use chacha20poly1305::{Key, XChaCha20Poly1305};
+use chacha20poly1305::{AeadCore, ChaChaPoly1305, Key, XChaCha20Poly1305};
+use sha2::Sha256;
 
 /// The size of data chunks to encrypt or decrypt at a time in bytes.
 pub const CHUNKSIZE: usize = 4096;
 
 /// A `SnapshotStream` is a wrapper around a btrfs stream
-/// that maps the stream to an encrypted version preceeded by the nonce.
+/// that maps the stream to an encrypted version
+/// preceeded by a randomly generated nonce.
 pub struct SnapshotStream<B: BufRead> {
-    pub(crate) inner: B,
+    inner: B,
     // The purpose of the `Option` is to allow `cipher` to be moved
     // when calling `encrypt_last` on it with just a mutable reference
     // to the `SnapshotStream` (so that `SnapshotStream::read_data`
     // can be called multiple times).
-    pub(crate) cipher: Option<EncryptorBE32<XChaCha20Poly1305>>,
-    pub(crate) header: VecDeque<u8>,
+    cipher: Option<EncryptorBE32<XChaCha20Poly1305>>,
+    header: VecDeque<u8>,
     buf: VecDeque<u8>,
 }
 
 impl<B: BufRead> SnapshotStream<B> {
-    pub(crate) fn new(
-        inner: B,
-        cipher: EncryptorBE32<XChaCha20Poly1305>,
-        header: impl Into<VecDeque<u8>>,
-    ) -> Self {
+    pub(crate) fn new<P: AsRef<[u8]>>(inner: B, passphrase: P) -> Self {
+        let nonce = ChaChaPoly1305::<XChaCha20, U19>::generate_nonce(&mut OsRng);
+        let key_array =
+            pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(passphrase.as_ref(), &nonce, 600000);
+        let key = Key::from_slice(&key_array);
+        let cipher = EncryptorBE32::new(key, &nonce);
+
         Self {
             inner,
             cipher: Some(cipher),
-            header: header.into(),
+            header: nonce.to_vec().into(),
             buf: VecDeque::new(),
         }
     }
@@ -118,11 +124,13 @@ pub struct RecoveryStream<B: BufRead> {
 }
 
 impl<B: BufRead> RecoveryStream<B> {
-    pub(crate) fn new(
-        inner: B,
-        key: &Key,
-        nonce: &GenericArray<u8, U19>,
-    ) -> Result<Self, LocalNodeError> {
+    pub(crate) fn new<P: AsRef<[u8]>>(mut inner: B, passphrase: P) -> Result<Self, LocalNodeError> {
+        let mut nonce_buf = [0; 19];
+        inner.read_exact(&mut nonce_buf)?;
+
+        let nonce = GenericArray::from_slice(&nonce_buf);
+        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(passphrase.as_ref(), nonce, 600000);
+        let key = Key::from_slice(&key_array);
         let cipher = DecryptorBE32::new(key, nonce);
 
         Ok(Self {
