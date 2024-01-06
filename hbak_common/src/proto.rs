@@ -1,15 +1,19 @@
 use crate::config::NodeConfig;
-use crate::stream::SnapshotStream;
+use crate::stream::{RecoveryStream, SnapshotStream};
 use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
-use std::io::BufReader;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
 
 use chacha20::XChaCha20;
-use chacha20poly1305::aead::{consts::U19, stream::EncryptorBE32, AeadCore, OsRng};
+use chacha20poly1305::aead::generic_array::GenericArray;
+use chacha20poly1305::aead::stream::EncryptorBE32;
+use chacha20poly1305::aead::{AeadCore, OsRng};
+use chacha20poly1305::consts::U19;
 use chacha20poly1305::{ChaChaPoly1305, Key};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -233,6 +237,12 @@ impl LocalNode {
         self.config.subvols.contains(subvol)
     }
 
+    /// Reports whether the `LocalNode` is the origin of the specified `Snapshot`
+    /// by verifying the node name.
+    pub fn owns_backup(&self, backup: &Snapshot) -> bool {
+        backup.node_name() == self.config.node_name
+    }
+
     /// Creates a new btrfs snapshot of the specified subvolume.
     pub fn snapshot_now(
         &self,
@@ -321,6 +331,72 @@ impl LocalNode {
             EncryptorBE32::new(key, &nonce),
             nonce.to_vec(),
         ))
+    }
+
+    /// Returns all backups of the specified subvolume
+    /// that have been synchronized to this node.
+    pub fn all_backups(&self, subvol: String) -> Result<Vec<Snapshot>, LocalNodeError> {
+        if !self.owns_subvol(&subvol) {
+            return Err(LocalNodeError::ForeignSubvolume(subvol));
+        }
+
+        let backups = fs::read_dir(BACKUP_DIR)?;
+        let mut all_backups = Vec::new();
+        for backup in backups {
+            all_backups.push(Snapshot::try_from(&*backup?.path())?);
+        }
+
+        Ok(all_backups)
+    }
+
+    /// Returns the latest full backup of the specified subvolume of this node.
+    pub fn latest_backup_full(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
+        self.all_backups(subvol.clone())?
+            .into_iter()
+            .filter(|backup| self.owns_backup(backup) && !backup.is_incremental())
+            .max_by_key(|backup| backup.taken())
+            .ok_or(LocalNodeError::NoFullBackup(subvol))
+    }
+
+    /// Returns a new [`crate::stream::RecoveryStream`]
+    /// wrapping the latest full backup of the specified subvolume.
+    pub fn import_full(
+        &self,
+        subvol: String,
+    ) -> Result<RecoveryStream<BufReader<File>>, LocalNodeError> {
+        let src = self.latest_backup_full(subvol)?.backup_path();
+        let mut file = BufReader::new(File::open(src)?);
+
+        let mut nonce_buf = [0; 19];
+        file.read_exact(&mut nonce_buf)?;
+
+        let nonce = GenericArray::from_slice(&nonce_buf);
+        let key_array = pbkdf2::pbkdf2_hmac_array::<Sha256, 32>(
+            self.config.passphrase.as_bytes(),
+            nonce,
+            600000,
+        );
+        let key = Key::from_slice(&key_array);
+
+        RecoveryStream::new(file, key, nonce)
+    }
+
+    /// Writes the provided [`crate::stream::RecoveryStream`]
+    /// to the specified local snapshot.
+    pub fn recover<B: BufRead>(
+        &self,
+        stream: RecoveryStream<B>,
+        snapshot: &Snapshot,
+    ) -> Result<(), LocalNodeError> {
+        let dst = snapshot.snapshot_path();
+        let cmd = Command::new("btrfs")
+            .arg("receive")
+            .arg(dst)
+            .stdin(Stdio::piped())
+            .spawn()?;
+
+        stream.write_to(&mut cmd.stdin.ok_or(LocalNodeError::NoBtrfsInput)?)?;
+        Ok(())
     }
 }
 

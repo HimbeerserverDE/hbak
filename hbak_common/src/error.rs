@@ -65,6 +65,9 @@ pub enum LocalNodeError {
     /// A btrfs command failed to execute correctly.
     #[error("Btrfs command execution failed")]
     BtrfsCmd,
+    /// A btrfs command did not provide a stdin file.
+    #[error("Btrfs command does not have stdin")]
+    NoBtrfsInput,
     /// A btrfs command did not provide a stdout file.
     #[error("Btrfs command does not have stdout")]
     NoBtrfsOutput,
@@ -76,6 +79,9 @@ pub enum LocalNodeError {
     #[error("Insecure config permissions (limit access to root user!)")]
     InsecurePerms,
 
+    /// No full backup of the specified subvolume could be found on this node.
+    #[error("No full backups of subvolume \"{0}\" exist locally")]
+    NoFullBackup(String),
     /// No full snapshot of the specified subvolume could be found on this node.
     #[error("No full snapshots of subvolume \"{0}\" exist")]
     NoFullSnapshot(String),
