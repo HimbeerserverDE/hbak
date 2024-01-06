@@ -318,6 +318,7 @@ dependencies = [
  "hbak_common",
  "hex",
  "rpassword",
+ "thiserror",
 ]
 
 [[package]]

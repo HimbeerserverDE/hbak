@@ -1,3 +1,6 @@
+mod error;
+use error::*;
+
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::proto::LocalNode;
 use hbak_common::system;
@@ -88,7 +91,7 @@ enum Commands {
     ExportPass,
 }
 
-fn main() -> Result<(), hbak_common::LocalNodeError> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -151,8 +154,11 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
 
             push.retain(|subvol| !local_node.owns_subvol(subvol));
 
-            let secret = rpassword::prompt_password("Enter remote node encryption passphrase: ")?;
-            let (verifier, hmac) = hbak_common::hash_passphrase(secret)?;
+            println!("Use the passphrase export results from the remote node below.");
+            let verifier_hex = rpassword::prompt_password("Enter verifier: ")?;
+            let verifier = hex::decode(verifier_hex)?;
+            let hmac_hex = rpassword::prompt_password("Enter HMAC hash: ")?;
+            let hmac = hex::decode(hmac_hex)?;
 
             let mut node_config = NodeConfig::load()?;
 
