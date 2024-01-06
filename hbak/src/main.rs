@@ -198,8 +198,8 @@ fn main() -> Result<(), hbak_common::LocalNodeError> {
             let node_config = NodeConfig::load()?;
             let (verifier, hmac) = hbak_common::hash_passphrase(node_config.passphrase)?;
 
-            println!("Verifier: {:?}", verifier);
-            println!("HMAC:     {:?}", hmac);
+            println!("Verifier: {}", hex::encode(verifier));
+            println!("HMAC:     {}", hex::encode(hmac));
         }
     }
 
