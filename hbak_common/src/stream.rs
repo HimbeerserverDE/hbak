@@ -146,15 +146,6 @@ impl<B: BufRead> RecoveryStream<B> {
     pub fn read_data(&mut self, buf: &mut [u8]) -> Result<usize, LocalNodeError> {
         let mut n = 0;
 
-        while let Some(byte) = self.buf.pop_front() {
-            if n >= buf.len() {
-                break;
-            }
-
-            buf[n] = byte;
-            n += 1;
-        }
-
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
             let mut chunk = [0; CHUNKSIZE];
@@ -175,6 +166,15 @@ impl<B: BufRead> RecoveryStream<B> {
                     .extend(self.cipher.take().unwrap().decrypt_last(chunk)?.into_iter());
                 break;
             }
+        }
+
+        while let Some(byte) = self.buf.pop_front() {
+            if n >= buf.len() {
+                break;
+            }
+
+            buf[n] = byte;
+            n += 1;
         }
 
         Ok(n)
