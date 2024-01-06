@@ -101,7 +101,7 @@ pub enum LocalNodeError {
     IoError(#[from] io::Error),
 
     /// The encryption or decryption of some data failed.
-    #[error("ChaCha20Poly1305 error: {0}")]
+    #[error("Encryption or decryption failure")]
     ChaCha20Poly1305(#[from] chacha20poly1305::Error),
     /// A `toml::ser::Error` TOML serialization error occured.
     #[error("TOML serialization error: {0}")]
