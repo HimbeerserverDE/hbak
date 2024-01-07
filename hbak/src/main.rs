@@ -91,7 +91,7 @@ enum Commands {
     ExportPass,
 }
 
-fn main() -> Result<()> {
+fn logic() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -213,4 +213,11 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() {
+    match logic() {
+        Ok(_) => {}
+        Err(e) => eprintln!("Error: {}", e),
+    }
 }
