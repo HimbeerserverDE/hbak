@@ -2,6 +2,7 @@ use crate::proto::Snapshot;
 
 use std::io;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A `SnapshotParseError` indicates a failure parsing a `Snapshot`.
@@ -121,3 +122,8 @@ pub enum LocalNodeError {
     #[error("TOML deserialization error: {0}")]
     TomlDe(#[from] toml::de::Error),
 }
+
+/// A `NetworkError` indicates an error condition on a network connection.
+/// It may be a low-level connection issue or a high-level protocol error.
+#[derive(Clone, Debug, Eq, PartialEq, Error, Serialize, Deserialize)]
+pub enum NetworkError {}

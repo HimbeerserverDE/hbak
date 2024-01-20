@@ -125,8 +125,18 @@ impl TryFrom<&Path> for Snapshot {
     }
 }
 
+/// Describes what the last known timestamps of full and incremental snapshots
+/// of a [`Volume`] are.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LatestSnapshots {
+    /// Timestamp of the last full snapshot.
+    pub last_full: NaiveDateTime,
+    /// Timestamp of the last incremental snapshot.
+    pub last_incremental: NaiveDateTime,
+}
+
 /// A `Volume` is a unique combination of btrfs subvolume and host name.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Volume {
     node_name: String,
     subvol: String,
