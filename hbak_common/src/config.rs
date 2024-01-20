@@ -38,7 +38,7 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    pub const PATH: &str = "/etc/hbak.conf";
+    pub const PATH: &'static str = "/etc/hbak.conf";
 
     /// Loads the configuration file of the current machine.
     pub fn load() -> Result<Self, LocalNodeError> {

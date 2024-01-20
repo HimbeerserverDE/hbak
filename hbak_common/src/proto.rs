@@ -27,7 +27,7 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    const TIMESTAMP_FMT: &str = "%Y%m%d%H%M%S";
+    const TIMESTAMP_FMT: &'static str = "%Y%m%d%H%M%S";
 
     /// Returns the name of the node the `Snapshot` represents.
     pub fn node_name(&self) -> &str {
