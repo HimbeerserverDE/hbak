@@ -1,5 +1,5 @@
 use crate::proto::{LatestSnapshots, Snapshot, Volume};
-use crate::NetworkError;
+use crate::RemoteError;
 
 use std::collections::HashMap;
 
@@ -14,11 +14,11 @@ pub enum CryptoMessage {
     /// Start the authentication process. This message is serverbound.
     Hello(Hello),
     /// Server identity proof and challenge. This message is clientbound.
-    ServerAuth(Result<ServerAuth, NetworkError>),
+    ServerAuth(Result<ServerAuth, RemoteError>),
     /// Client identity proof. This message is serverbound.
-    ClientAuth(Result<ClientAuth, NetworkError>),
+    ClientAuth(Result<ClientAuth, RemoteError>),
     /// Authentication successful. Further traffic is encrypted. This message is clientbound.
-    Encrypt(Result<(), NetworkError>),
+    Encrypt(Result<(), RemoteError>),
 }
 
 /// Start the authentication process. This message is serverbound.
@@ -59,11 +59,11 @@ pub enum StreamMessage {
     /// Request to stream a certain snapshot.
     Transmit(Transmit),
     /// Stream setup successful. Followed by the data.
-    Stream(Result<(), NetworkError>),
+    Stream(Result<(), RemoteError>),
     /// Sending a chunk of maximum size.
-    Chunk(Result<(), NetworkError>),
+    Chunk(Result<(), RemoteError>),
     /// Sending the final (dynamically sized) chunk.
-    Final(Result<usize, NetworkError>),
+    Final(Result<usize, RemoteError>),
 }
 
 /// The latest known timestamps of full and incremental snapshots that may be sent.

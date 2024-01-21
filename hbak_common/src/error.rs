@@ -125,5 +125,18 @@ pub enum LocalNodeError {
 
 /// A `NetworkError` indicates an error condition on a network connection.
 /// It may be a low-level connection issue or a high-level protocol error.
+#[derive(Debug, Error)]
+pub enum NetworkError {
+    /// A high-level `RemoteError` occured.
+    #[error("Remote error: {0}")]
+    RemoteError(#[from] RemoteError),
+
+    /// A `std::io::Error` I/O error occured.
+    #[error("IO error: {0}")]
+    IoError(#[from] io::Error),
+}
+
+/// A `RemoteError` indicates an error condition on the current session
+/// or the remote node. This is a special case of [`NetworkError`].
 #[derive(Clone, Debug, Eq, PartialEq, Error, Serialize, Deserialize)]
-pub enum NetworkError {}
+pub enum RemoteError {}
