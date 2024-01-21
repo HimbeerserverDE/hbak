@@ -57,7 +57,7 @@ pub enum StreamMessage {
     /// The latest known timestamps of full and incremental snapshots that may be sent.
     SyncInfo(SyncInfo),
     /// Request to stream a certain snapshot.
-    Transmit(Transmit),
+    Transmit(Target),
     /// Stream setup successful. Followed by the data.
     Stream(Result<(), RemoteError>),
     /// Sending a chunk of maximum size.
@@ -76,7 +76,7 @@ pub struct SyncInfo {
 
 /// Request to stream a certain snapshot.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Transmit {
+pub struct Target {
     /// The snapshot to stream to.
     pub snapshot: Snapshot,
 }

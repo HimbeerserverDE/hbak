@@ -1,4 +1,4 @@
-use crate::message::Transmit;
+use crate::message::Target;
 use crate::{NetworkError, RemoteError};
 
 use std::net::{SocketAddr, TcpStream};
@@ -70,16 +70,16 @@ enum StreamConnState {
     Ready,
     /// Transmission in progress. Reception may be initiated by the remote node,
     /// but no transmission may be initiated by the local node.
-    Transmitting(Transmit),
+    Transmitting(Target),
     /// Reception in progress. Transmission may be initiated by the local node,
     /// but no reception may be initiated by the remote node.
-    Receiving(Transmit),
+    Receiving(Target),
     /// Transmission and reception in progress. Neither may be initiated.
     FullDuplex {
         /// The destination the local transmission is writing to on the remote node.
-        tx: Transmit,
+        tx: Target,
         /// The destination the remote transmission is writing to on the local node.
-        rx: Transmit,
+        rx: Target,
     },
     /// No streaming in progress. Further transmissions are not allowed.
     /// The local node has finished replication to the remote node.
