@@ -98,7 +98,9 @@ pub fn hash_passphrase<P: AsRef<[u8]>>(
     passphrase: P,
 ) -> Result<(Vec<u8>, Vec<u8>), LocalNodeError> {
     let verifier = random_bytes(32);
-    Ok((verifier, derive_key(&verifier, passphrase)?))
+    let key = derive_key(&verifier, passphrase)?;
+
+    Ok((verifier, key))
 }
 
 /// Converts the provided verifier and passphrase into a key
