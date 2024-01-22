@@ -78,27 +78,37 @@ pub fn random_bytes(n: usize) -> Vec<u8> {
         .collect()
 }
 
-/// Converts the provided passphrase into a hash
-/// suitable for node authentication using a random verifier.
+/// Converts the provided passphrase into a key
+/// suitable for node authentication or encryption using a random verifier.
 ///
-/// Returns the verifier and the HMAC hash in this order
+/// This function wraps the [`derive_key`] function.
+///
+/// Returns the verifier and the HMAC hash in this order.
 pub fn hash_passphrase<P: AsRef<[u8]>>(
     passphrase: P,
 ) -> Result<(Vec<u8>, Vec<u8>), LocalNodeError> {
     let verifier = random_bytes(32);
+    Ok((verifier, derive_key(&verifier, passphrase)?))
+}
 
+/// Converts the provided verifier and passphrase into a key
+/// for node authentication or encryption.
+pub fn derive_key<P: AsRef<[u8]>>(
+    verifier: &[u8],
+    passphrase: P,
+) -> Result<Vec<u8>, LocalNodeError> {
     let mut key_array = [0; 32];
     Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::default(),
         argon2::Params::new(524288, 10, 4, Some(32))?,
     )
-    .hash_password_into(passphrase.as_ref(), &verifier, &mut key_array)?;
+    .hash_password_into(passphrase.as_ref(), verifier, &mut key_array)?;
 
     let mut mac: Hmac<Sha256> =
         Hmac::new_from_slice(&key_array).expect("HMAC can take key of any size");
     mac.update(&verifier);
     let hmac = mac.finalize();
 
-    Ok((verifier, hmac.into_bytes().to_vec()))
+    Ok(hmac.into_bytes().to_vec())
 }

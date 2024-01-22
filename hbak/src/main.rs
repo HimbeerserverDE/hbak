@@ -87,7 +87,7 @@ enum Commands {
         /// The name of the remote node to remove from the security configuration.
         node_name: String,
     },
-    /// Export a random verifier and HMAC hash of the local encryption passphrase.
+    /// Export a random verifier and key of the local encryption passphrase.
     ExportPass,
 }
 
@@ -160,8 +160,8 @@ fn logic() -> Result<()> {
             println!("Use the passphrase export results from the remote node below.");
             let verifier_hex = rpassword::prompt_password("Enter verifier: ")?;
             let verifier = hex::decode(verifier_hex)?;
-            let hmac_hex = rpassword::prompt_password("Enter HMAC hash: ")?;
-            let hmac = hex::decode(hmac_hex)?;
+            let key_hex = rpassword::prompt_password("Enter key: ")?;
+            let key = hex::decode(key_hex)?;
 
             let mut node_config = NodeConfig::load()?;
 
@@ -169,7 +169,7 @@ fn logic() -> Result<()> {
             node_config.auth.push(RemoteNodeAuth {
                 node_name,
                 verifier,
-                hmac,
+                key,
                 push,
                 pull,
             });
@@ -205,10 +205,10 @@ fn logic() -> Result<()> {
         }
         Commands::ExportPass => {
             let node_config = NodeConfig::load()?;
-            let (verifier, hmac) = hbak_common::hash_passphrase(node_config.passphrase)?;
+            let (verifier, key) = hbak_common::hash_passphrase(node_config.passphrase)?;
 
             println!("Verifier: {}", hex::encode(verifier));
-            println!("HMAC:     {}", hex::encode(hmac));
+            println!("Key:      {}", hex::encode(key));
         }
     }
 
