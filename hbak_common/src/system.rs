@@ -78,6 +78,16 @@ pub fn random_bytes(n: usize) -> Vec<u8> {
         .collect()
 }
 
+/// Performs an HMAC-SHA256 hash computation.
+pub fn hash_hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
+    let mut mac: Hmac<Sha256> =
+        Hmac::new_from_slice(secret).expect("HMAC can take key of any size");
+    mac.update(data);
+    let hmac = mac.finalize();
+
+    hmac.into_bytes().to_vec()
+}
+
 /// Converts the provided passphrase into a key
 /// suitable for node authentication or encryption using a random verifier.
 ///
@@ -105,10 +115,6 @@ pub fn derive_key<P: AsRef<[u8]>>(
     )
     .hash_password_into(passphrase.as_ref(), verifier, &mut key_array)?;
 
-    let mut mac: Hmac<Sha256> =
-        Hmac::new_from_slice(&key_array).expect("HMAC can take key of any size");
-    mac.update(&verifier);
-    let hmac = mac.finalize();
-
-    Ok(hmac.into_bytes().to_vec())
+    let key = hash_hmac(&key_array, verifier);
+    Ok(key)
 }
