@@ -152,4 +152,5 @@ pub struct StreamConn {
     stream: TcpStream,
     encryptor: EncryptorBE32<XChaCha20Poly1305>,
     decryptor: DecryptorBE32<XChaCha20Poly1305>,
+    state: StreamConnState,
 }
