@@ -19,6 +19,8 @@ pub enum CryptoMessage {
     ClientAuth(Result<ClientAuth, RemoteError>),
     /// Authentication successful. Further traffic is encrypted. This message is clientbound.
     Encrypt(Result<(), RemoteError>),
+    /// Protocol error independent of the operation or state context.
+    Error(RemoteError),
 }
 
 /// Start the authentication process. This message is serverbound.

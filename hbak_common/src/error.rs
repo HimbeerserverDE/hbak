@@ -127,6 +127,12 @@ pub enum LocalNodeError {
 /// It may be a low-level connection issue or a high-level protocol error.
 #[derive(Debug, Error)]
 pub enum NetworkError {
+    /// A network reception represents an illegal state transition on the local node.
+    #[error("Illegal state transition")]
+    IllegalTransition,
+    /// An error occured on the local node.
+    #[error("Local error: {0}")]
+    LocalError(#[from] LocalNodeError),
     /// A high-level `RemoteError` occured.
     #[error("Remote error: {0}")]
     RemoteError(#[from] RemoteError),
@@ -134,9 +140,26 @@ pub enum NetworkError {
     /// A `std::io::Error` I/O error occured.
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+
+    /// A bincode (de)serialization error occured.
+    #[error("Bincode (de)serialization error: {0}")]
+    Bincode(#[from] Box<bincode::ErrorKind>),
 }
 
 /// A `RemoteError` indicates an error condition on the current session
 /// or the remote node. This is a special case of [`NetworkError`].
 #[derive(Clone, Debug, Eq, PartialEq, Error, Serialize, Deserialize)]
-pub enum RemoteError {}
+pub enum RemoteError {
+    /// Access is denied by the remote node.
+    /// May be an authentication or authorization failure, infer details from the context.
+    #[error("Access denied by remote node")]
+    AccessDenied,
+    /// The remote node was denied access.
+    /// May be an authentication or authorization failure, infer details from the context.
+    #[error("Remote node is unauthorized")]
+    Unauthorized,
+
+    /// A network transmission represents an illegal state transition on the remote node.
+    #[error("Illegal state transition on remote node")]
+    IllegalTransition,
+}
