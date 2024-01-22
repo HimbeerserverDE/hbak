@@ -69,6 +69,15 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
     Ok(())
 }
 
+/// Provides a `Vec<u8>` of `n` random bytes. Uses the thread-local generator
+/// of the `rand` crate.
+pub fn random_bytes(n: usize) -> Vec<u8> {
+    rand::thread_rng()
+        .sample_iter(&rand::distributions::Standard)
+        .take(32)
+        .collect()
+}
+
 /// Converts the provided passphrase into a hash
 /// suitable for node authentication using a random verifier.
 ///
@@ -76,10 +85,7 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
 pub fn hash_passphrase<P: AsRef<[u8]>>(
     passphrase: P,
 ) -> Result<(Vec<u8>, Vec<u8>), LocalNodeError> {
-    let verifier: Vec<u8> = rand::thread_rng()
-        .sample_iter(&rand::distributions::Standard)
-        .take(32)
-        .collect();
+    let verifier = random_bytes(32);
 
     let mut key_array = [0; 32];
     Argon2::new(
