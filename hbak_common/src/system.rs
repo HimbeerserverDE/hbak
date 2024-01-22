@@ -74,7 +74,7 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
 pub fn random_bytes(n: usize) -> Vec<u8> {
     rand::thread_rng()
         .sample_iter(&rand::distributions::Standard)
-        .take(32)
+        .take(n)
         .collect()
 }
 
