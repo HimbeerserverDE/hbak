@@ -35,6 +35,8 @@ pub struct Hello {
 /// Server identity proof and challenge. This message is clientbound.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ServerAuth {
+    /// The verifier needed to compute the shared secret on the client.
+    pub verifier: Vec<u8>,
     /// A random challenge for serverbound authentication.
     pub challenge: Vec<u8>,
     /// The server's identity proof, HMAC(shared_secret, client_challenge).
