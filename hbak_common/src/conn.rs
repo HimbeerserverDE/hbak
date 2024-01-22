@@ -2,7 +2,6 @@ use crate::message::Target;
 use crate::{NetworkError, RemoteError};
 
 use std::net::{SocketAddr, TcpStream};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
@@ -110,7 +109,7 @@ enum StreamConnState {
 /// and a remote [`AuthServ`], transforming into a [`StreamConn`] on success.
 pub struct AuthConn {
     stream: TcpStream,
-    state: Arc<Mutex<AuthConnState>>,
+    state: AuthConnState,
 }
 
 impl AuthConn {
@@ -124,7 +123,7 @@ impl From<TcpStream> for AuthConn {
     fn from(stream: TcpStream) -> Self {
         Self {
             stream,
-            state: Arc::new(Mutex::new(AuthConnState::default())),
+            state: AuthConnState::default(),
         }
     }
 }
@@ -133,14 +132,14 @@ impl From<TcpStream> for AuthConn {
 /// and a remote [`AuthConn`], transforming into a [`StreamConn`] on success.
 pub struct AuthServ {
     stream: TcpStream,
-    state: Arc<Mutex<AuthServState>>,
+    state: AuthServState,
 }
 
 impl From<TcpStream> for AuthServ {
     fn from(stream: TcpStream) -> Self {
         Self {
             stream,
-            state: Arc::new(Mutex::new(AuthServState::default())),
+            state: AuthServState::default(),
         }
     }
 }
