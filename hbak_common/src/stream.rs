@@ -1,9 +1,9 @@
+use crate::system;
 use crate::LocalNodeError;
 
 use std::collections::VecDeque;
 use std::io::{BufRead, Write};
 
-use argon2::Argon2;
 use chacha20::XChaCha20;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
@@ -32,12 +32,7 @@ impl<B: BufRead> SnapshotStream<B> {
     pub(crate) fn new<P: AsRef<[u8]>>(inner: B, passphrase: P) -> Result<Self, LocalNodeError> {
         let nonce = ChaChaPoly1305::<XChaCha20, U19>::generate_nonce(&mut OsRng);
         let mut key_array = [0; 32];
-        Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::default(),
-            argon2::Params::new(524288, 10, 4, Some(32))?,
-        )
-        .hash_password_into(passphrase.as_ref(), &nonce, &mut key_array)?;
+        system::hash_argon2id(&mut key_array, &nonce, passphrase)?;
         let key = Key::from_slice(&key_array);
         let cipher = EncryptorBE32::new(key, &nonce);
 
@@ -135,12 +130,7 @@ impl<B: BufRead> RecoveryStream<B> {
 
         let nonce = GenericArray::from_slice(&nonce_buf);
         let mut key_array = [0; 32];
-        Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::default(),
-            argon2::Params::new(524288, 10, 4, Some(32))?,
-        )
-        .hash_password_into(passphrase.as_ref(), nonce, &mut key_array)?;
+        system::hash_argon2id(&mut key_array, nonce, passphrase)?;
         let key = Key::from_slice(&key_array);
         let cipher = DecryptorBE32::new(key, nonce);
 

@@ -88,6 +88,22 @@ pub fn hash_hmac(secret: &[u8], data: &[u8]) -> Vec<u8> {
     hmac.into_bytes().to_vec()
 }
 
+/// Performs an Argon2id hash computation.
+pub fn hash_argon2id<P: AsRef<[u8]>>(
+    okm: &mut [u8],
+    salt: &[u8],
+    passphrase: P,
+) -> Result<(), LocalNodeError> {
+    Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::default(),
+        argon2::Params::new(524288, 10, 4, Some(32))?,
+    )
+    .hash_password_into(passphrase.as_ref(), salt, okm)?;
+
+    Ok(())
+}
+
 /// Converts the provided passphrase into a key
 /// suitable for node authentication or encryption using a random verifier.
 ///
@@ -110,12 +126,7 @@ pub fn derive_key<P: AsRef<[u8]>>(
     passphrase: P,
 ) -> Result<Vec<u8>, LocalNodeError> {
     let mut key_array = [0; 32];
-    Argon2::new(
-        argon2::Algorithm::Argon2id,
-        argon2::Version::default(),
-        argon2::Params::new(524288, 10, 4, Some(32))?,
-    )
-    .hash_password_into(passphrase.as_ref(), verifier, &mut key_array)?;
+    hash_argon2id(&mut key_array, verifier, passphrase)?;
 
     let key = hash_hmac(&key_array, verifier);
     Ok(key)
