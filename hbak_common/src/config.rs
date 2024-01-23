@@ -98,7 +98,7 @@ pub struct RemoteNodeAuth {
     /// A random value used by the remote node to compute the HMAC shared secret.
     pub verifier: Vec<u8>,
     /// The HMAC hash of verifier and passphrase for mutual authentication.
-    pub hmac: Vec<u8>,
+    pub key: Vec<u8>,
     /// The volumes the remote node is allowed to push.
     /// Must not include subvolumes owned by the local node.
     pub push: Vec<String>,
