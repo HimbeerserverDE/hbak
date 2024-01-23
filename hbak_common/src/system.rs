@@ -97,7 +97,7 @@ pub fn hash_argon2id<P: AsRef<[u8]>>(
     Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::default(),
-        argon2::Params::new(524288, 10, 4, Some(32))?,
+        argon2::Params::new(524288, 32, 128, Some(32))?,
     )
     .hash_password_into(passphrase.as_ref(), salt, okm)?;
 
