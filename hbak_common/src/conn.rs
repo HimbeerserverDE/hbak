@@ -15,20 +15,6 @@ use subtle::ConstantTimeEq;
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The only valid state of an [`AuthServ`].
-///
-/// A `Hello` message has been received and a `ServerAuth` response has been sent.
-/// Awaiting the `ClientAuth` reaction.
-#[derive(Debug, Eq, PartialEq)]
-struct AuthServState {
-    /// The shared secret for mutual authentication and transport encryption.
-    key: Vec<u8>,
-    /// The challenge sent in the `ServerAuth` response.
-    challenge: Vec<u8>,
-    /// The nonce for transport encryption.
-    nonce: Vec<u8>,
-}
-
 /// The valid states of a [`StreamConn`].
 #[derive(Debug, Default, Eq, PartialEq)]
 enum StreamConnState {
@@ -176,10 +162,13 @@ impl AuthServ {
         self,
         auth_storage: A,
     ) -> Result<StreamConn, NetworkError> {
-        // No need to check for `AuthServState::Idle`, consuming the `AuthServ`
-        // guarantees that this function can never be called again.
+        // Consuming the `AuthServ` guarantees that this function can never be called again.
 
-        let state;
+        let challenge = system::random_bytes(32);
+        let nonce;
+        let key;
+
+        let client_proof;
 
         match self.recv_message()? {
             CryptoMessage::Hello(hello) => {
@@ -188,14 +177,13 @@ impl AuthServ {
                     .find(|rna| rna.node_name == hello.node_name);
 
                 if let Some(auth) = auth {
-                    let challenge = system::random_bytes(32);
-                    let proof = system::hash_hmac(&auth.key, &hello.challenge);
+                    nonce = hello.nonce;
+                    key = auth.key;
 
-                    state = AuthServState {
-                        key: auth.key,
-                        challenge: challenge.clone(),
-                        nonce: hello.nonce,
-                    };
+                    client_proof = system::hash_hmac(&key, &challenge);
+
+                    let proof = system::hash_hmac(&key, &hello.challenge);
+
                     self.send_message(&CryptoMessage::ServerAuth(Ok(ServerAuth {
                         verifier: auth.verifier,
                         challenge,
@@ -218,11 +206,9 @@ impl AuthServ {
             CryptoMessage::ClientAuth(client_auth) => {
                 let client_auth = client_auth?;
 
-                let client_proof = system::hash_hmac(&state.key, &state.challenge);
-
                 if client_auth.proof.ct_eq(&client_proof).into() {
                     self.send_message(&CryptoMessage::Encrypt(Ok(())))?;
-                    Ok(StreamConn::from_conn(self.stream, state.key, state.nonce))
+                    Ok(StreamConn::from_conn(self.stream, key, nonce))
                 } else {
                     self.send_message(&CryptoMessage::Encrypt(Err(RemoteError::AccessDenied)))?;
                     Err(RemoteError::Unauthorized.into())
