@@ -1,3 +1,4 @@
+use crate::config::RemoteNodeAuth;
 use crate::message::*;
 use crate::system;
 use crate::{NetworkError, RemoteError};
@@ -34,25 +35,18 @@ enum AuthConnState {
     },
 }
 
-/// The valid states of an [`AuthServ`].
-#[derive(Debug, Default, Eq, PartialEq)]
-enum AuthServState {
-    /// Authentication has not started. Awaiting the `Hello` request.
-    #[default]
-    Idle,
-    /// A `Hello` message has been received and a `ServerAuth` response has been sent.
-    /// Awaiting the `ClientAuth` reaction.
-    Proof {
-        /// The challenge sent in the `ServerAuth` response.
-        challenge: Vec<u8>,
-        /// The nonce for transport encryption.
-        nonce: Vec<u8>,
-    },
-    /// An `Encrypt` message has been sent and encryption has been configured.
-    /// Further plaintext reads or writes are not allowed.
-    Encrypted,
-    /// Authentication or encryption setup has failed. The connection should be terminated.
-    Failed(RemoteError),
+/// The only valid state of an [`AuthServ`].
+///
+/// A `Hello` message has been received and a `ServerAuth` response has been sent.
+/// Awaiting the `ClientAuth` reaction.
+#[derive(Debug, Eq, PartialEq)]
+struct AuthServState {
+    /// The shared secret for mutual authentication and transport encryption.
+    key: Vec<u8>,
+    /// The challenge sent in the `ServerAuth` response.
+    challenge: Vec<u8>,
+    /// The nonce for transport encryption.
+    nonce: Vec<u8>,
 }
 
 /// The valid states of a [`StreamConn`].
@@ -124,8 +118,7 @@ impl AuthConn {
         node_name: String,
         passphrase: P,
     ) -> Result<StreamConn, NetworkError> {
-        // No need to check for `AuthConnState::Idle`, consuming the `AuthConn`
-        // guarantees that this function can never be called again.
+        // Consuming the `AuthConn` guarantees that this function can never be called again.
 
         // Limit variables to this scope so they aren't used in the main loop by accident.
         {
@@ -217,15 +210,90 @@ impl From<TcpStream> for AuthConn {
 /// and a remote [`AuthConn`], transforming into a [`StreamConn`] on success.
 pub struct AuthServ {
     stream: TcpStream,
-    state: AuthServState,
+}
+
+impl AuthServ {
+    /// Performs mutual authentication and encryption of the connection
+    /// using the provided authentication storage,
+    /// returning a [`StreamConn`] on success.
+    pub fn secure_stream<A: IntoIterator<Item = RemoteNodeAuth>>(
+        self,
+        auth_storage: A,
+    ) -> Result<StreamConn, NetworkError> {
+        // No need to check for `AuthServState::Idle`, consuming the `AuthServ`
+        // guarantees that this function can never be called again.
+
+        let state;
+
+        match self.recv_message()? {
+            CryptoMessage::Hello(hello) => {
+                let auth = auth_storage
+                    .into_iter()
+                    .find(|rna| rna.node_name == hello.node_name);
+
+                if let Some(auth) = auth {
+                    let challenge = system::random_bytes(32);
+                    let proof = system::hash_hmac(&auth.key, &hello.challenge);
+
+                    state = AuthServState {
+                        key: auth.key,
+                        challenge: challenge.clone(),
+                        nonce: hello.nonce,
+                    };
+                    self.send_message(&CryptoMessage::ServerAuth(Ok(ServerAuth {
+                        verifier: auth.verifier,
+                        challenge,
+                        proof,
+                    })))?;
+                } else {
+                    self.send_message(&CryptoMessage::ServerAuth(Err(RemoteError::AccessDenied)))?;
+                    return Err(RemoteError::Unauthorized.into());
+                }
+            }
+            _ => {
+                self.send_message(&CryptoMessage::ServerAuth(Err(
+                    RemoteError::IllegalTransition,
+                )))?;
+                return Err(NetworkError::IllegalTransition);
+            }
+        }
+
+        match self.recv_message()? {
+            CryptoMessage::ClientAuth(client_auth) => {
+                let client_auth = client_auth?;
+
+                let client_proof = system::hash_hmac(&state.key, &state.challenge);
+
+                if client_auth.proof.ct_eq(&client_proof).into() {
+                    self.send_message(&CryptoMessage::Encrypt(Ok(())))?;
+                    Ok(StreamConn::from_conn(self.stream, state.key, state.nonce))
+                } else {
+                    self.send_message(&CryptoMessage::Encrypt(Err(RemoteError::AccessDenied)))?;
+                    Err(RemoteError::Unauthorized.into())
+                }
+            }
+            _ => {
+                self.send_message(&CryptoMessage::Encrypt(Err(RemoteError::IllegalTransition)))?;
+                Err(NetworkError::IllegalTransition)
+            }
+        }
+    }
+
+    fn send_message(&self, message: &CryptoMessage) -> Result<(), NetworkError> {
+        let buf = bincode::serialize(message)?;
+        (&self.stream).write_all(&buf)?;
+
+        Ok(())
+    }
+
+    fn recv_message(&self) -> Result<CryptoMessage, NetworkError> {
+        Ok(bincode::deserialize_from(&self.stream)?)
+    }
 }
 
 impl From<TcpStream> for AuthServ {
     fn from(stream: TcpStream) -> Self {
-        Self {
-            stream,
-            state: AuthServState::default(),
-        }
+        Self { stream }
     }
 }
 
