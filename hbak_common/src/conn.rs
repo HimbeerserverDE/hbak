@@ -15,26 +15,6 @@ use subtle::ConstantTimeEq;
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The valid states of an [`AuthConn`].
-#[derive(Debug, Eq, PartialEq)]
-enum AuthConnState {
-    /// A `Hello` message has been sent. Awaiting the `ServerAuth` response.
-    Handshake {
-        /// The challenge sent in the `Hello` message.
-        challenge: Vec<u8>,
-        /// The nonce for transport encryption.
-        nonce: Vec<u8>,
-    },
-    /// A `ServerAuth` message has been received and a `ClientAuth` reaction has been sent.
-    /// Awaiting the `Encrypt` response.
-    Proof {
-        /// The shared secret for mutual authentication and transport encryption.
-        key: Vec<u8>,
-        /// The nonce for transport encryption.
-        nonce: Vec<u8>,
-    },
-}
-
 /// The only valid state of an [`AuthServ`].
 ///
 /// A `Hello` message has been received and a `ServerAuth` response has been sent.
@@ -101,7 +81,6 @@ enum StreamConnState {
 /// and a remote [`AuthServ`], transforming into a [`StreamConn`] on success.
 pub struct AuthConn {
     stream: TcpStream,
-    state: AuthConnState,
 }
 
 impl AuthConn {
@@ -114,70 +93,53 @@ impl AuthConn {
     /// using the provided node name and passphrase,
     /// returning a [`StreamConn`] on success.
     pub fn secure_stream<P: AsRef<[u8]>>(
-        mut self,
+        self,
         node_name: String,
         passphrase: P,
     ) -> Result<StreamConn, NetworkError> {
         // Consuming the `AuthConn` guarantees that this function can never be called again.
 
-        // Limit variables to this scope so they aren't used in the main loop by accident.
-        {
-            let AuthConnState::Handshake { challenge, nonce } = &self.state else {
-                unreachable!()
-            };
+        let challenge = system::random_bytes(32);
+        let nonce = system::random_bytes(32);
+        let key;
 
-            self.send_message(&CryptoMessage::Hello(Hello {
-                node_name,
-                challenge: challenge.to_vec(),
-                nonce: nonce.to_vec(),
-            }))?;
+        self.send_message(&CryptoMessage::Hello(Hello {
+            node_name,
+            challenge: challenge.clone(),
+            nonce: nonce.clone(),
+        }))?;
+
+        match self.recv_message()? {
+            CryptoMessage::ServerAuth(server_auth) => {
+                let server_auth = server_auth?;
+
+                key = system::derive_key(&server_auth.verifier, &passphrase)?;
+                let server_proof = system::hash_hmac(&key, &challenge);
+
+                if server_auth.proof.ct_eq(&server_proof).into() {
+                    let proof = system::hash_hmac(&key, &server_auth.challenge);
+                    self.send_message(&CryptoMessage::ClientAuth(Ok(ClientAuth { proof })))?;
+                } else {
+                    self.send_message(&CryptoMessage::ClientAuth(Err(RemoteError::AccessDenied)))?;
+                    return Err(RemoteError::Unauthorized.into());
+                }
+            }
+            _ => {
+                self.send_message(&CryptoMessage::ClientAuth(Err(
+                    RemoteError::IllegalTransition,
+                )))?;
+                return Err(NetworkError::IllegalTransition);
+            }
         }
 
-        loop {
-            let message = self.recv_message()?;
-
-            match (self.state, message) {
-                (
-                    AuthConnState::Handshake { challenge, nonce },
-                    CryptoMessage::ServerAuth(server_auth),
-                ) => {
-                    let server_auth = server_auth?;
-
-                    let key = system::derive_key(&server_auth.verifier, &passphrase)?;
-                    let server_proof = system::hash_hmac(&key, &challenge);
-
-                    if server_auth.proof.ct_eq(&server_proof).into() {
-                        let proof = system::hash_hmac(&key, &server_auth.challenge);
-
-                        self.state = AuthConnState::Proof { key, nonce };
-                        self.send_message(&CryptoMessage::ClientAuth(Ok(ClientAuth { proof })))?;
-                    } else {
-                        self.state = AuthConnState::Handshake { challenge, nonce };
-                        self.send_message(&CryptoMessage::ClientAuth(Err(
-                            RemoteError::AccessDenied,
-                        )))?;
-
-                        return Err(RemoteError::Unauthorized.into());
-                    }
-                }
-                (AuthConnState::Proof { key, nonce }, CryptoMessage::Encrypt(encrypt)) => {
-                    encrypt?;
-                    return Ok(StreamConn::from_conn(self.stream, key, nonce));
-                }
-                (AuthConnState::Handshake { challenge, nonce }, _) => {
-                    self.state = AuthConnState::Handshake { challenge, nonce };
-                    self.send_message(&CryptoMessage::ClientAuth(Err(
-                        RemoteError::IllegalTransition,
-                    )))?;
-
-                    return Err(NetworkError::IllegalTransition);
-                }
-                (AuthConnState::Proof { key, nonce }, _) => {
-                    self.state = AuthConnState::Proof { key, nonce };
-                    self.send_message(&CryptoMessage::Error(RemoteError::IllegalTransition))?;
-
-                    return Err(NetworkError::IllegalTransition);
-                }
+        match self.recv_message()? {
+            CryptoMessage::Encrypt(encrypt) => {
+                encrypt?;
+                Ok(StreamConn::from_conn(self.stream, key, nonce))
+            }
+            _ => {
+                self.send_message(&CryptoMessage::Error(RemoteError::IllegalTransition))?;
+                Err(NetworkError::IllegalTransition)
             }
         }
     }
@@ -196,13 +158,7 @@ impl AuthConn {
 
 impl From<TcpStream> for AuthConn {
     fn from(stream: TcpStream) -> Self {
-        Self {
-            stream,
-            state: AuthConnState::Handshake {
-                challenge: system::random_bytes(32),
-                nonce: system::random_bytes(32),
-            },
-        }
+        Self { stream }
     }
 }
 
