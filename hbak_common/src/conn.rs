@@ -226,7 +226,7 @@ pub struct StreamConn<P: Phase> {
 }
 
 impl<P: Phase> StreamConn<P> {
-    fn send_message(&self, message: &StreamMessage) -> Result<(), NetworkError> {
+    fn send_message(&mut self, message: &StreamMessage) -> Result<(), NetworkError> {
         let plaintext = bincode::serialize(message)?;
         let ciphertext = self.encryptor.encrypt_next(plaintext.as_slice())?;
 
@@ -236,7 +236,7 @@ impl<P: Phase> StreamConn<P> {
         Ok(())
     }
 
-    fn recv_message(&self) -> Result<StreamMessage, NetworkError> {
+    fn recv_message(&mut self) -> Result<StreamMessage, NetworkError> {
         let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
         let plaintext = self.decryptor.decrypt_next(ciphertext.0.as_slice())?;
 
@@ -262,7 +262,7 @@ impl StreamConn<Idle> {
     /// Exchanges synchronization information (timestamps), returning an `Active` `StreamConn`
     /// that can send and receive data.
     pub fn meta_sync(
-        self,
+        mut self,
         sync_info: SyncInfo,
     ) -> Result<(StreamConn<Active>, SyncInfo), NetworkError> {
         self.send_message(&StreamMessage::SyncInfo(sync_info))?;
