@@ -165,4 +165,20 @@ pub enum RemoteError {
     /// A network transmission represents an illegal state transition on the remote node.
     #[error("Illegal state transition on remote node")]
     IllegalTransition,
+
+    /// Cannot set up multiple concurrent streams in the same direction.
+    #[error("Already streaming in this direction")]
+    AlreadyStreaming,
+    /// Unsolicited attempt to stream data.
+    #[error("Not streaming in this direction")]
+    NotStreaming,
+    /// The remote node is unable to continue streaming *our* transmission.
+    /// This is usually caused by a [`std::io::Error`] on the destination stream.
+    #[error("Remote node reception failure")]
+    RxError,
+    /// The remote node is unable to continue streaming *its* transmission.
+    /// This is usually caused by a [`std::io::Error`] on the source stream
+    /// or the network connection (or its encryption).
+    #[error("Remote node transmission failure")]
+    TxError,
 }

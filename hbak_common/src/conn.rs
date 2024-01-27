@@ -1,9 +1,11 @@
 use crate::config::RemoteNodeAuth;
 use crate::message::*;
+use crate::proto::Snapshot;
+use crate::stream::{SnapshotStream, CHUNKSIZE};
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
@@ -56,6 +58,7 @@ impl AuthConn {
     pub fn secure_stream<P: AsRef<[u8]>>(
         self,
         node_name: String,
+        remote_node_name: String,
         passphrase: P,
     ) -> Result<StreamConn<Idle>, NetworkError> {
         // Consuming the `AuthConn` guarantees that this function can never be called again.
@@ -96,7 +99,12 @@ impl AuthConn {
         match self.recv_message()? {
             CryptoMessage::Encrypt(encrypt) => {
                 encrypt?;
-                Ok(StreamConn::from_conn(self.stream, key, nonce))
+                Ok(StreamConn::from_conn(
+                    self.stream,
+                    key,
+                    nonce,
+                    remote_node_name,
+                ))
             }
             _ => {
                 self.send_message(&CryptoMessage::Error(RemoteError::IllegalTransition))?;
@@ -142,6 +150,7 @@ impl AuthServ {
         let challenge = system::random_bytes(32);
         let nonce;
         let key;
+        let remote_node_name;
 
         let client_proof;
 
@@ -154,6 +163,7 @@ impl AuthServ {
                 if let Some(auth) = auth {
                     nonce = hello.nonce;
                     key = auth.key;
+                    remote_node_name = hello.node_name;
 
                     client_proof = system::hash_hmac(&key, &challenge);
 
@@ -183,7 +193,12 @@ impl AuthServ {
 
                 if client_auth.proof.ct_eq(&client_proof).into() {
                     self.send_message(&CryptoMessage::Encrypt(Ok(())))?;
-                    Ok(StreamConn::from_conn(self.stream, key, nonce))
+                    Ok(StreamConn::from_conn(
+                        self.stream,
+                        key,
+                        nonce,
+                        remote_node_name,
+                    ))
                 } else {
                     self.send_message(&CryptoMessage::Encrypt(Err(RemoteError::AccessDenied)))?;
                     Err(RemoteError::Unauthorized.into())
@@ -222,10 +237,15 @@ pub struct StreamConn<P: Phase> {
     stream: TcpStream,
     encryptor: EncryptorBE32<XChaCha20Poly1305>,
     decryptor: DecryptorBE32<XChaCha20Poly1305>,
+    remote_node_name: String,
     _phase: PhantomData<P>,
 }
 
 impl<P: Phase> StreamConn<P> {
+    pub fn remote_node_name(&self) -> &str {
+        &self.remote_node_name
+    }
+
     fn send_message(&mut self, message: &StreamMessage) -> Result<(), NetworkError> {
         let plaintext = bincode::serialize(message)?;
         let ciphertext = self.encryptor.encrypt_next(plaintext.as_slice())?;
@@ -247,7 +267,12 @@ impl<P: Phase> StreamConn<P> {
 impl StreamConn<Idle> {
     /// Constructs a new `StreamConn` from a [`std::net::TcpStream`],
     /// encryption key and nonce.
-    pub(crate) fn from_conn(stream: TcpStream, key: Vec<u8>, nonce: Vec<u8>) -> Self {
+    pub(crate) fn from_conn(
+        stream: TcpStream,
+        key: Vec<u8>,
+        nonce: Vec<u8>,
+        remote_node_name: String,
+    ) -> Self {
         let key = Key::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce);
 
@@ -255,6 +280,7 @@ impl StreamConn<Idle> {
             stream,
             encryptor: EncryptorBE32::new(key, nonce),
             decryptor: DecryptorBE32::new(key, nonce),
+            remote_node_name,
             _phase: PhantomData,
         }
     }
@@ -273,6 +299,7 @@ impl StreamConn<Idle> {
                     stream: self.stream,
                     encryptor: self.encryptor,
                     decryptor: self.decryptor,
+                    remote_node_name: self.remote_node_name,
                     _phase: PhantomData,
                 },
                 sync_info,
@@ -282,5 +309,106 @@ impl StreamConn<Idle> {
                 Err(NetworkError::IllegalTransition)
             }
         }
+    }
+}
+
+impl StreamConn<Active> {
+    /// Transmits the passed `SnapshotStream`s using their associated metadata.
+    /// Receives remote transmissions using the provided stream setup closure.
+    pub fn data_sync<
+        B: BufRead,
+        W: Write,
+        I: IntoIterator<Item = (SnapshotStream<B>, Snapshot)>,
+        F: Fn(&str, Snapshot) -> Result<W, RemoteError>,
+    >(
+        mut self,
+        tx: I,
+        rx_setup: F,
+    ) -> Result<(), NetworkError> {
+        let mut stream = None;
+
+        let mut handle = |stream_conn: &mut Self| -> Result<(), NetworkError> {
+            match stream_conn.recv_message()? {
+                StreamMessage::Stream(stream) => stream?,
+                StreamMessage::Replicate(replicate) => {
+                    if stream.is_none() {
+                        match rx_setup(stream_conn.remote_node_name(), replicate.snapshot) {
+                            Ok(w) => {
+                                stream = Some(w);
+                                stream_conn.send_message(&StreamMessage::Stream(Ok(())))?;
+                            }
+                            Err(e) => {
+                                stream_conn.send_message(&StreamMessage::Stream(Err(e.clone())))?;
+                                return Err(e.into());
+                            }
+                        }
+                    } else {
+                        stream_conn.send_message(&StreamMessage::Stream(Err(
+                            RemoteError::AlreadyStreaming,
+                        )))?;
+                    }
+                }
+                StreamMessage::Chunk(chunk) => {
+                    if let Some(stream) = &mut stream {
+                        match stream.write_all(&chunk) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                stream_conn
+                                    .send_message(&StreamMessage::Error(RemoteError::RxError))?;
+                                return Err(e.into());
+                            }
+                        }
+                    } else {
+                        stream_conn
+                            .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
+                    }
+                }
+                StreamMessage::End(end) => {
+                    end?;
+                    stream = None;
+                }
+                StreamMessage::Error(e) => return Err(e.into()),
+                _ => {
+                    stream_conn
+                        .send_message(&StreamMessage::Error(RemoteError::IllegalTransition))?;
+                    return Err(NetworkError::IllegalTransition);
+                }
+            }
+
+            Ok(())
+        };
+
+        let send_chunk = |stream_conn: &mut Self,
+                          snapshot_stream: &mut SnapshotStream<B>|
+         -> Result<bool, NetworkError> {
+            let mut chunk = [0; CHUNKSIZE];
+            let n = snapshot_stream.read_data(&mut chunk)?;
+            let chunk = &chunk[..n];
+
+            if n > 0 {
+                stream_conn.send_message(&StreamMessage::Chunk(chunk.to_vec()))?;
+                Ok(true)
+            } else {
+                stream_conn.send_message(&StreamMessage::End(Ok(())))?;
+                Ok(false)
+            }
+        };
+
+        for (mut snapshot_stream, snapshot) in tx.into_iter() {
+            self.send_message(&StreamMessage::Replicate(snapshot.into()))?;
+            handle(&mut self)?;
+
+            while match send_chunk(&mut self, &mut snapshot_stream) {
+                Ok(is_data_left) => is_data_left,
+                Err(e) => {
+                    self.send_message(&StreamMessage::End(Err(RemoteError::TxError)))?;
+                    return Err(e);
+                }
+            } {
+                handle(&mut self)?;
+            }
+        }
+
+        todo!()
     }
 }
