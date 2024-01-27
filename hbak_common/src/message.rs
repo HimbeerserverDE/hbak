@@ -90,3 +90,9 @@ pub struct Target {
     /// The snapshot to stream to.
     pub snapshot: Snapshot,
 }
+
+impl From<Snapshot> for Target {
+    fn from(snapshot: Snapshot) -> Self {
+        Self { snapshot }
+    }
+}
