@@ -64,8 +64,10 @@ pub struct ClientAuth {
 pub enum StreamMessage {
     /// The latest known timestamps of full and incremental snapshots that may be sent.
     SyncInfo(SyncInfo),
-    /// Request to stream a certain snapshot.
-    Transmit(Target),
+    /// Request to stream to a certain snapshot.
+    Replicate(Target),
+    /// Request to receive a certain snapshot.
+    Restore(Target),
     /// Stream setup successful. Followed by the data.
     Stream(Result<(), RemoteError>),
     /// Sending a chunk of maximum size.
