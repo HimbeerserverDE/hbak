@@ -66,8 +66,6 @@ pub enum StreamMessage {
     SyncInfo(SyncInfo),
     /// Request to stream to a certain snapshot.
     Replicate(Target),
-    /// Request to receive a certain snapshot.
-    Restore(Target),
     /// Stream setup successful. Followed by the data.
     Stream(Result<(), RemoteError>),
     /// Sending a chunk of dynamic size.
