@@ -70,10 +70,10 @@ pub enum StreamMessage {
     Restore(Target),
     /// Stream setup successful. Followed by the data.
     Stream(Result<(), RemoteError>),
-    /// Sending a chunk of maximum size.
-    Chunk,
-    /// Sending the final (dynamically sized) chunk or an error.
-    Final(Result<usize, RemoteError>),
+    /// Sending a chunk of dynamic size.
+    Chunk(usize),
+    /// Transmission completed or failed.
+    End(Result<(), RemoteError>),
     /// Protocol error independent of the operation or state context.
     Error(RemoteError),
 }
