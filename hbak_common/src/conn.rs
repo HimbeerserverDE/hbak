@@ -225,6 +225,25 @@ pub struct StreamConn<P: Phase> {
     _phase: PhantomData<P>,
 }
 
+impl<P: Phase> StreamConn<P> {
+    fn send_message(&self, message: &StreamMessage) -> Result<(), NetworkError> {
+        let plaintext = bincode::serialize(message)?;
+        let ciphertext = self.encryptor.encrypt_next(plaintext.as_slice())?;
+
+        let buf = bincode::serialize(&RawMessage(ciphertext))?;
+        (&self.stream).write_all(&buf)?;
+
+        Ok(())
+    }
+
+    fn recv_message(&self) -> Result<StreamMessage, NetworkError> {
+        let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
+        let plaintext = self.decryptor.decrypt_next(ciphertext.0.as_slice())?;
+
+        Ok(bincode::deserialize(&plaintext)?)
+    }
+}
+
 impl StreamConn<Idle> {
     /// Constructs a new `StreamConn` from a [`std::net::TcpStream`],
     /// encryption key and nonce.

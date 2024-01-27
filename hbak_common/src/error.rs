@@ -144,6 +144,9 @@ pub enum NetworkError {
     /// A bincode (de)serialization error occured.
     #[error("Bincode (de)serialization error: {0}")]
     Bincode(#[from] Box<bincode::ErrorKind>),
+    /// The encryption or decryption of a network message failed.
+    #[error("Encryption or decryption failure")]
+    ChaCha20Poly1305(#[from] chacha20poly1305::Error),
 }
 
 /// A `RemoteError` indicates an error condition on the current session

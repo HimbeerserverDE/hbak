@@ -5,6 +5,10 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// A network message containing raw data such as an encrypted inner message.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct RawMessage(pub Vec<u8>);
+
 /// A network message to be exchanged between `hbak` and `hbakd`
 /// initializing mutual authentication and encryption.
 ///
