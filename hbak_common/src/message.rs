@@ -71,7 +71,7 @@ pub enum StreamMessage {
     /// Stream setup successful. Followed by the data.
     Stream(Result<(), RemoteError>),
     /// Sending a chunk of dynamic size.
-    Chunk(usize),
+    Chunk(Vec<u8>),
     /// Transmission completed or failed.
     End(Result<(), RemoteError>),
     /// Protocol error independent of the operation or state context.
