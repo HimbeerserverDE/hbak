@@ -4,6 +4,7 @@ use crate::system;
 use crate::{NetworkError, RemoteError};
 
 use std::io::Write;
+use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
@@ -15,53 +16,27 @@ use subtle::ConstantTimeEq;
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The valid states of a [`StreamConn`].
-#[derive(Debug, Default, Eq, PartialEq)]
-enum StreamConnState {
-    /// No streaming in progress. Synchronization information has not been received,
-    /// but has been sent to the remote node.
-    #[default]
-    Idle,
-    /// No streaming in progress. Synchronization information has been received.
-    /// Streaming may be initiated.
-    Ready,
-    /// Transmission in progress. Reception may be initiated by the remote node,
-    /// but no transmission may be initiated by the local node.
-    Transmitting(Target),
-    /// Reception in progress. Transmission may be initiated by the local node,
-    /// but no reception may be initiated by the remote node.
-    Receiving(Target),
-    /// Transmission and reception in progress. Neither may be initiated.
-    FullDuplex {
-        /// The destination the local transmission is writing to on the remote node.
-        tx: Target,
-        /// The destination the remote transmission is writing to on the local node.
-        rx: Target,
-    },
-    /// No streaming in progress. Further transmissions are not allowed.
-    /// The local node has finished replication to the remote node.
-    FinishSent,
-    /// No streaming in progress. Further receptions are not allowed.
-    /// The remote node has finished replication to the local node.
-    FinishReceived,
-    /// Transmission in progress. Further receptions are not allowed.
-    /// The remote node has finished replication to the local node.
-    FinishTransmitting,
-    /// Reception in progress. Further transmissions are not allowed.
-    /// The local node has finished replication to the remote node.
-    FinishReceiving,
-    /// No streaming in progress. Further initiations are not allowed.
-    /// Both nodes have fully synchronized with each other.
-    Finished,
-    /// Stream setup is denied or has failed. No reception in progress.
-    /// No new transmissions may be initiated
-    /// until the `Ready` or `Receiving` state is entered.
-    Failed(RemoteError),
-    /// Stream setup is denied or has failed. Reception in progress.
-    /// No new transmissions may be initiated
-    /// until the `Ready` or `Receiving` state is entered.
-    RecvFailed(RemoteError),
+mod private {
+    pub trait Sealed {}
 }
+
+/// A valid phase of a [`StreamConn`].
+pub trait Phase: private::Sealed {}
+
+impl private::Sealed for Idle {}
+impl private::Sealed for Active {}
+impl Phase for Idle {}
+impl Phase for Active {}
+
+/// The `Idle` phase of a [`StreamConn`].
+///
+/// No stream setup or timestamp synchronization has occured and transmissions are not allowed.
+pub struct Idle;
+
+/// The `Active` phase of a [`StreamConn`].
+///
+/// Timestamp synchronization has succeeded and transmissions are allowed and possibly in progress.
+pub struct Active;
 
 /// An `AuthConn` attempts mutual authentication between the local node
 /// and a remote [`AuthServ`], transforming into a [`StreamConn`] on success.
@@ -82,7 +57,7 @@ impl AuthConn {
         self,
         node_name: String,
         passphrase: P,
-    ) -> Result<StreamConn, NetworkError> {
+    ) -> Result<StreamConn<Idle>, NetworkError> {
         // Consuming the `AuthConn` guarantees that this function can never be called again.
 
         let challenge = system::random_bytes(32);
@@ -161,7 +136,7 @@ impl AuthServ {
     pub fn secure_stream<A: IntoIterator<Item = RemoteNodeAuth>>(
         self,
         auth_storage: A,
-    ) -> Result<StreamConn, NetworkError> {
+    ) -> Result<StreamConn<Idle>, NetworkError> {
         // Consuming the `AuthServ` guarantees that this function can never be called again.
 
         let challenge = system::random_bytes(32);
@@ -243,14 +218,14 @@ impl From<TcpStream> for AuthServ {
 /// and provides circuit-switched access to snapshot storage.
 /// It is the result of successful authentication and encryption
 /// using an [`AuthConn`] or an [`AuthServ`].
-pub struct StreamConn {
+pub struct StreamConn<P: Phase> {
     stream: TcpStream,
     encryptor: EncryptorBE32<XChaCha20Poly1305>,
     decryptor: DecryptorBE32<XChaCha20Poly1305>,
-    state: StreamConnState,
+    _phase: PhantomData<P>,
 }
 
-impl StreamConn {
+impl StreamConn<Idle> {
     /// Constructs a new `StreamConn` from a [`std::net::TcpStream`],
     /// encryption key and nonce.
     pub(crate) fn from_conn(stream: TcpStream, key: Vec<u8>, nonce: Vec<u8>) -> Self {
@@ -261,7 +236,7 @@ impl StreamConn {
             stream,
             encryptor: EncryptorBE32::new(key, nonce),
             decryptor: DecryptorBE32::new(key, nonce),
-            state: StreamConnState::default(),
+            _phase: PhantomData,
         }
     }
 }
