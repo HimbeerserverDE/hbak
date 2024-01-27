@@ -72,6 +72,8 @@ pub enum StreamMessage {
     Chunk(Result<(), RemoteError>),
     /// Sending the final (dynamically sized) chunk.
     Final(Result<usize, RemoteError>),
+    /// Protocol error independent of the operation or state context.
+    Error(RemoteError),
 }
 
 /// The latest known timestamps of full and incremental snapshots that may be sent.

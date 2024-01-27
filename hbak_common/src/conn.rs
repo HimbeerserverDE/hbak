@@ -258,4 +258,29 @@ impl StreamConn<Idle> {
             _phase: PhantomData,
         }
     }
+
+    /// Exchanges synchronization information (timestamps), returning an `Active` `StreamConn`
+    /// that can send and receive data.
+    pub fn meta_sync(
+        self,
+        sync_info: SyncInfo,
+    ) -> Result<(StreamConn<Active>, SyncInfo), NetworkError> {
+        self.send_message(&StreamMessage::SyncInfo(sync_info))?;
+
+        match self.recv_message()? {
+            StreamMessage::SyncInfo(sync_info) => Ok((
+                StreamConn::<Active> {
+                    stream: self.stream,
+                    encryptor: self.encryptor,
+                    decryptor: self.decryptor,
+                    _phase: PhantomData,
+                },
+                sync_info,
+            )),
+            _ => {
+                self.send_message(&StreamMessage::Error(RemoteError::IllegalTransition))?;
+                Err(NetworkError::IllegalTransition)
+            }
+        }
+    }
 }
