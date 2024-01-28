@@ -20,6 +20,9 @@ struct Cli {
 enum Commands {
     /// Perform basic initialization of the local node.
     Init {
+        /// Initialize the configuration file but not the btrfs subvolumes.
+        #[arg(short = 'c', long = "config-only")]
+        config_only: bool,
         /// The device file the local btrfs file system is located at.
         device: String,
         /// The name to use for this node.
@@ -106,12 +109,13 @@ fn logic() -> Result<()> {
 
     match cli.command {
         Commands::Init {
+            config_only,
             device,
             node_name,
             bind_addr,
         } => {
             let passphrase = rpassword::prompt_password("Enter new encryption passphrase: ")?;
-            system::init(device, bind_addr, node_name, passphrase)?;
+            system::init(config_only, device, bind_addr, node_name, passphrase)?;
         }
         Commands::Clean { backups } => {
             system::deinit(backups)?;

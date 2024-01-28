@@ -17,6 +17,7 @@ pub const MOUNTPOINT: &str = "/mnt/hbak";
 
 /// Initializes the configuration file and local btrfs subvolumes.
 pub fn init(
+    config_only: bool,
     device: String,
     bind_addr: Option<SocketAddr>,
     node_name: String,
@@ -39,7 +40,11 @@ pub fn init(
 
     node_config.save()?;
 
-    init_btrfs(&node_config.device)
+    if !config_only {
+        init_btrfs(&node_config.device)?;
+    }
+
+    Ok(())
 }
 
 fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
