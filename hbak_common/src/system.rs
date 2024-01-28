@@ -3,6 +3,7 @@ use crate::proto::{BACKUP_DIR, SNAPSHOT_DIR};
 use crate::LocalNodeError;
 
 use std::fs;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::process::Command;
 
@@ -15,13 +16,19 @@ use sys_mount::{Mount, UnmountFlags};
 pub const MOUNTPOINT: &str = "/mnt/hbak";
 
 /// Initializes the configuration file and local btrfs subvolumes.
-pub fn init(device: String, node_name: String, passphrase: String) -> Result<(), LocalNodeError> {
+pub fn init(
+    device: String,
+    bind_addr: Option<SocketAddr>,
+    node_name: String,
+    passphrase: String,
+) -> Result<(), LocalNodeError> {
     if Path::new(NodeConfig::PATH).exists() {
         return Err(LocalNodeError::ConfigExists);
     }
 
     let node_config = NodeConfig {
         device,
+        bind_addr,
         node_name,
         subvols: Vec::default(),
         passphrase,

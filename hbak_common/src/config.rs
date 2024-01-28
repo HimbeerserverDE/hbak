@@ -2,6 +2,7 @@ use crate::LocalNodeError;
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,8 @@ use serde::{Deserialize, Serialize};
 pub struct NodeConfig {
     /// The device file the local btrfs file system is located at.
     pub device: String,
+    /// The network address `hbakd` binds to. The default is `[::]:20406` (dual stack).
+    pub bind_addr: Option<SocketAddr>,
     /// The name of the [`crate::proto::Node`].
     pub node_name: String,
     /// The subvolumes owned by the [`crate::proto::Node`], i.e. the subvolumes
