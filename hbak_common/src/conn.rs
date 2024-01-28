@@ -320,16 +320,13 @@ impl StreamConn<Idle> {
 impl StreamConn<Active> {
     /// Transmits the passed `SnapshotStream`s using their associated metadata.
     /// Receives remote transmissions using the provided stream setup closure.
-    pub fn data_sync<
+    pub fn data_sync<B, W, I, F>(mut self, tx: I, rx_setup: F) -> Result<(), NetworkError>
+    where
         B: BufRead,
         W: Write,
         I: IntoIterator<Item = (SnapshotStream<B>, Snapshot)>,
         F: Fn(&str, Snapshot) -> Result<W, RemoteError>,
-    >(
-        mut self,
-        tx: I,
-        rx_setup: F,
-    ) -> Result<(), NetworkError> {
+    {
         let mut stream = None;
 
         let mut handle = |stream_conn: &mut Self| -> Result<(), NetworkError> {
