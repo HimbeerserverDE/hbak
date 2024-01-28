@@ -72,6 +72,11 @@ impl Snapshot {
 
         path_buf
     }
+
+    /// Reports whether this `Snapshot` is a snapshot of the specified [`Volume`].
+    pub fn is_of_volume(&self, volume: &Volume) -> bool {
+        self.node_name() == volume.node_name() && self.subvol() == volume.subvol()
+    }
 }
 
 impl fmt::Display for Snapshot {
@@ -355,29 +360,31 @@ impl LocalNode {
         Ok(())
     }
 
-    /// Returns all backups of the specified subvolume
-    /// that have been synchronized to this node.
-    pub fn all_backups(&self, subvol: String) -> Result<Vec<Snapshot>, LocalNodeError> {
-        if !self.owns_subvol(&subvol) {
-            return Err(LocalNodeError::ForeignSubvolume(subvol));
-        }
+    /// Returns all backups that have been synchronized to this node
+    /// of the specified volume or all volumes.
+    pub fn all_backups(&self, volume: Option<&Volume>) -> Result<Vec<Snapshot>, LocalNodeError> {
+        let mut all_backups = Vec::new();
 
         let backups = fs::read_dir(BACKUP_DIR)?;
-        let mut all_backups = Vec::new();
         for backup in backups {
-            all_backups.push(Snapshot::try_from(&*backup?.path())?);
+            let snapshot = Snapshot::try_from(&*backup?.path())?;
+
+            match volume {
+                Some(volume) if !snapshot.is_of_volume(volume) => {}
+                _ => all_backups.push(snapshot),
+            }
         }
 
         Ok(all_backups)
     }
 
-    /// Returns the latest full backup of the specified subvolume of this node.
-    pub fn latest_backup_full(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
-        self.all_backups(subvol.clone())?
+    /// Returns the latest locally known full backup of the specified volume.
+    pub fn latest_backup_full(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
+        self.all_backups(Some(&volume))?
             .into_iter()
-            .filter(|backup| self.owns_backup(backup) && !backup.is_incremental())
+            .filter(|backup| !backup.is_incremental())
             .max_by_key(|backup| backup.taken())
-            .ok_or(LocalNodeError::NoFullBackup(subvol))
+            .ok_or(LocalNodeError::NoFullBackup(volume))
     }
 
     /// Returns a new [`crate::stream::RecoveryStream`]
@@ -386,7 +393,9 @@ impl LocalNode {
         &self,
         subvol: String,
     ) -> Result<RecoveryStream<BufReader<File>>, LocalNodeError> {
-        let backup = self.latest_backup_full(subvol)?;
+        let volume = Volume::new_local(subvol)?;
+
+        let backup = self.latest_backup_full(volume)?;
         if backup.snapshot_path().exists() {
             return Err(LocalNodeError::SnapshotNotGone(backup));
         }

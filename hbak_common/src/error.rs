@@ -1,4 +1,4 @@
-use crate::proto::Snapshot;
+use crate::proto::{Snapshot, Volume};
 
 use std::io;
 
@@ -85,9 +85,12 @@ pub enum LocalNodeError {
     #[error("Insecure config permissions (limit access to root user!)")]
     InsecurePerms,
 
-    /// No full backup of the specified subvolume could be found on this node.
-    #[error("No full backups of subvolume \"{0}\" exist locally")]
-    NoFullBackup(String),
+    /// No full backup of the specified volume could be found on this node.
+    #[error("No full backups of volume \"{0}\" exist locally")]
+    NoFullBackup(Volume),
+    /// No incremental backup of the specified volume could be found on this node.
+    #[error("No incremental backups of volume \"{0}\" exist locally")]
+    NoIncrementalBackup(Volume),
     /// No full snapshot of the specified subvolume could be found on this node.
     #[error("No full snapshots of subvolume \"{0}\" exist")]
     NoFullSnapshot(String),
