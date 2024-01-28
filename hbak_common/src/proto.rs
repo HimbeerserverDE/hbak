@@ -387,6 +387,15 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoFullBackup(volume))
     }
 
+    /// Returns the latest locally known incremental backup of the specified volume.
+    pub fn latest_backup_incremental(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
+        self.all_backups(Some(&volume))?
+            .into_iter()
+            .filter(|backup| !backup.is_incremental())
+            .max_by_key(|backup| backup.taken())
+            .ok_or(LocalNodeError::NoIncrementalBackup(volume))
+    }
+
     /// Returns a new [`crate::stream::RecoveryStream`]
     /// wrapping the latest full backup of the specified subvolume.
     pub fn import_full(
