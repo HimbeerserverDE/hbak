@@ -246,6 +246,7 @@ pub struct StreamConn<P: Phase> {
 }
 
 impl<P: Phase> StreamConn<P> {
+    /// Returns the name of the remote node.
     pub fn remote_node_name(&self) -> &str {
         &self.remote_node_name
     }
