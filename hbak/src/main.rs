@@ -21,7 +21,7 @@ enum Commands {
     /// Perform basic initialization of the local node.
     Init {
         /// Initialize the configuration file but not the btrfs subvolumes.
-        #[arg(short = 'c', long = "config-only")]
+        #[arg(short, long)]
         config_only: bool,
         /// The device file the local btrfs file system is located at.
         device: String,
@@ -33,7 +33,7 @@ enum Commands {
     /// Fully clean the local node of non-binary files with optional backup removal.
     Clean {
         /// Remove the btrfs subvolumes that contain the snapshots and backups.
-        #[arg(short = 'b', long = "backups")]
+        #[arg(short, long)]
         backups: bool,
     },
     /// Mark a subvolume as owned by the local node.
