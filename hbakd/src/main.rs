@@ -1,5 +1,5 @@
 use hbak_common::config::NodeConfig;
-use hbak_common::conn::DEFAULT_PORT;
+use hbak_common::conn::{AuthServ, DEFAULT_PORT};
 use hbak_common::{LocalNodeError, NetworkError};
 
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -46,7 +46,7 @@ fn serve() -> Result<(), LocalNodeError> {
         let stream = stream?;
         let peer_addr = stream.peer_addr()?;
 
-        match handle_client(stream) {
+        match handle_client(stream, &node_config) {
             Ok(_) => {}
             Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
         }
@@ -55,6 +55,9 @@ fn serve() -> Result<(), LocalNodeError> {
     unreachable!()
 }
 
-fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
-    todo!()
+fn handle_client(stream: TcpStream, node_config: &NodeConfig) -> Result<(), NetworkError> {
+    let auth_serv = AuthServ::from(stream);
+    let stream_conn = auth_serv.secure_stream(node_config.auth.clone())?;
+
+    Ok(())
 }
