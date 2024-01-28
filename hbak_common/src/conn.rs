@@ -15,6 +15,10 @@ use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
 use chacha20poly1305::{Key, XChaCha20Poly1305};
 use subtle::ConstantTimeEq;
 
+/// Default TCP server port. Not officially reserved.
+/// 406 is the sum of the ASCII codes for `hbak` and an offset to the 20000 port range.
+pub const DEFAULT_PORT: u16 = 20202;
+
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
