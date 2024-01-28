@@ -136,6 +136,9 @@ pub enum NetworkError {
     /// A network reception represents an illegal state transition on the local node.
     #[error("Illegal state transition")]
     IllegalTransition,
+    /// Unable to parse a [`Volume`].
+    #[error("Unable to parse volume: {0}")]
+    VolumeParseError(#[from] VolumeParseError),
     /// An error occured on the local node.
     #[error("Local error: {0}")]
     LocalError(#[from] LocalNodeError),
