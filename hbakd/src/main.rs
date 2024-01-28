@@ -4,10 +4,30 @@ use hbak_common::{LocalNodeError, NetworkError};
 
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 
+use clap::Parser;
+use fork::{daemon, Fork};
+
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+/// Background process to serve push and pull requests.
+struct Args {
+    /// Stay attached to the terminal instead of daemonizing.
+    debug: bool,
+}
+
 fn main() {
-    match serve() {
-        Ok(_) => {}
-        Err(e) => eprintln!("Error: {}", e),
+    let args = Args::parse();
+
+    if args.debug {
+        match serve() {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
+    } else if let Ok(Fork::Child) = daemon(false, false) {
+        match serve() {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        }
     }
 }
 
