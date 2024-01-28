@@ -252,15 +252,20 @@ impl LocalNode {
         })
     }
 
+    /// Returns a reference to the configuration of the `LocalNode`.
+    pub fn config(&self) -> &NodeConfig {
+        &self.config
+    }
+
     /// Reports whether the `LocalNode` is the origin of the specified subvolume.
     pub fn owns_subvol(&self, subvol: &String) -> bool {
-        self.config.subvols.contains(subvol)
+        self.config().subvols.contains(subvol)
     }
 
     /// Reports whether the `LocalNode` is the origin of the specified `Snapshot`
     /// by verifying the node name.
     pub fn owns_backup(&self, backup: &Snapshot) -> bool {
-        backup.node_name() == self.config.node_name
+        backup.node_name() == self.config().node_name
     }
 
     /// Creates a new btrfs snapshot of the specified subvolume.
@@ -342,7 +347,7 @@ impl LocalNode {
 
         SnapshotStream::new(
             BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
-            &self.config.passphrase,
+            &self.config().passphrase,
         )
     }
 
@@ -421,7 +426,7 @@ impl LocalNode {
         let src = backup.backup_path();
         let file = BufReader::new(File::open(src)?);
 
-        RecoveryStream::new(file, &self.config.passphrase)
+        RecoveryStream::new(file, &self.config().passphrase)
     }
 
     /// Writes the provided [`crate::stream::RecoveryStream`]
@@ -451,7 +456,7 @@ impl LocalNode {
 impl Node for LocalNode {
     /// Returns the name of the `LocalNode`.
     fn name(&self) -> &str {
-        &self.config.node_name
+        &self.config().node_name
     }
 }
 
@@ -463,7 +468,7 @@ impl fmt::Display for LocalNode {
 
 impl PartialEq for LocalNode {
     fn eq(&self, other: &Self) -> bool {
-        self.config.node_name == other.config.node_name
+        self.config().node_name == other.config().node_name
     }
 }
 
