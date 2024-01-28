@@ -20,7 +20,7 @@ use subtle::ConstantTimeEq;
 pub const DEFAULT_PORT: u16 = 20202;
 
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 mod private {
     pub trait Sealed {}
