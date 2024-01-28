@@ -205,7 +205,7 @@ fn logic() -> Result<()> {
         }
         Commands::ExportPass => {
             let node_config = NodeConfig::load()?;
-            let (verifier, key) = hbak_common::hash_passphrase(node_config.passphrase)?;
+            let (verifier, key) = system::hash_passphrase(node_config.passphrase)?;
 
             println!("Verifier: {}", hex::encode(verifier));
             println!("Key:      {}", hex::encode(key));

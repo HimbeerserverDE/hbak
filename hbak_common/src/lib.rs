@@ -7,5 +7,3 @@ pub mod message;
 pub mod proto;
 pub mod stream;
 pub mod system;
-
-pub use system::hash_passphrase;
