@@ -157,6 +157,21 @@ impl Volume {
             subvol,
         })
     }
+
+    /// Constructs a new `Volume` using the provided node and subvolume names.
+    pub fn with_node_name(node_name: String, subvol: String) -> Self {
+        Self { node_name, subvol }
+    }
+
+    /// Returns the name of the node owning this `Volume`.
+    pub fn node_name(&self) -> &str {
+        &self.node_name
+    }
+
+    /// Returns the name of the subvolume this `Volume` represents.
+    pub fn subvol(&self) -> &str {
+        &self.subvol
+    }
 }
 
 impl fmt::Display for Volume {
