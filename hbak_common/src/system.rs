@@ -76,6 +76,57 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
     Ok(())
 }
 
+/// Deinitializes the configuration file, optionally deleting the btrfs subvolumes.
+pub fn deinit(remove_backups: bool) -> Result<(), LocalNodeError> {
+    if !Path::new(NodeConfig::PATH).exists() {
+        return Err(LocalNodeError::ConfigUninit);
+    }
+
+    if remove_backups {
+        deinit_btrfs()?;
+    }
+
+    fs::remove_file(NodeConfig::PATH)?;
+
+    Ok(())
+}
+
+fn deinit_btrfs() -> Result<(), LocalNodeError> {
+    fs::create_dir_all(MOUNTPOINT)?;
+
+    let node_config = NodeConfig::load()?;
+
+    let _btrfs = Mount::builder().data("compress=zstd").mount_autodrop(
+        node_config.device,
+        MOUNTPOINT,
+        UnmountFlags::DETACH,
+    )?;
+
+    if !Command::new("btrfs")
+        .arg("subvolume")
+        .arg("delete")
+        .arg(BACKUP_DIR)
+        .spawn()?
+        .wait()?
+        .success()
+    {
+        return Err(LocalNodeError::BtrfsCmd);
+    }
+
+    if !Command::new("btrfs")
+        .arg("subvolume")
+        .arg("delete")
+        .arg(SNAPSHOT_DIR)
+        .spawn()?
+        .wait()?
+        .success()
+    {
+        return Err(LocalNodeError::BtrfsCmd);
+    }
+
+    Ok(())
+}
+
 /// Provides a `Vec<u8>` of `n` random bytes. Uses the thread-local generator
 /// of the `rand` crate.
 pub fn random_bytes(n: usize) -> Vec<u8> {

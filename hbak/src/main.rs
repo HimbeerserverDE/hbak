@@ -27,6 +27,12 @@ enum Commands {
         /// The network address `hbakd` binds to. The default is `[::]:20406` (dual stack).
         bind_addr: Option<SocketAddr>,
     },
+    /// Fully clean the local node of non-binary files with optional backup removal.
+    Clean {
+        /// Remove the btrfs subvolumes that contain the snapshots and backups.
+        #[arg(short = 'b', long = "backups")]
+        backups: bool,
+    },
     /// Mark a subvolume as owned by the local node.
     Track {
         /// The name of the subvolume to mark as owned.
@@ -106,6 +112,9 @@ fn logic() -> Result<()> {
         } => {
             let passphrase = rpassword::prompt_password("Enter new encryption passphrase: ")?;
             system::init(device, bind_addr, node_name, passphrase)?;
+        }
+        Commands::Clean { backups } => {
+            system::deinit(backups)?;
         }
         Commands::Track { subvol } => {
             let mut node_config = NodeConfig::load()?;

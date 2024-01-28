@@ -78,6 +78,9 @@ pub enum LocalNodeError {
     /// A configuration file already exists on this node.
     #[error("Local node is already initialized")]
     ConfigExists,
+    /// No configuration file exists on this node.
+    #[error("Local node is not initialized")]
+    ConfigUninit,
     /// The permissions on the configuration file are insecure.
     #[error("Insecure config permissions (limit access to root user!)")]
     InsecurePerms,
