@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct NodeConfig {
     /// The device file the local btrfs file system is located at.
     pub device: String,
-    /// The name of the [`Node`].
+    /// The name of the [`crate::proto::Node`].
     pub node_name: String,
-    /// The subvolumes owned by the [`Node`], i.e. the subvolumes
+    /// The subvolumes owned by the [`crate::proto::Node`], i.e. the subvolumes
     /// that originate from it.
     pub subvols: Vec<String>,
     /// The encryption passphrase for the subvolumes owned by this node.
