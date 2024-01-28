@@ -5,6 +5,8 @@ use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::proto::LocalNode;
 use hbak_common::system;
 
+use std::net::SocketAddr;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -22,6 +24,8 @@ enum Commands {
         device: String,
         /// The name to use for this node.
         node_name: String,
+        /// The network address `hbakd` binds to. The default is `[::]:20406` (dual stack).
+        bind_addr: Option<SocketAddr>,
     },
     /// Mark a subvolume as owned by the local node.
     Track {
@@ -95,9 +99,13 @@ fn logic() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { device, node_name } => {
+        Commands::Init {
+            device,
+            node_name,
+            bind_addr,
+        } => {
             let passphrase = rpassword::prompt_password("Enter new encryption passphrase: ")?;
-            system::init(device, node_name, passphrase)?;
+            system::init(device, bind_addr, node_name, passphrase)?;
         }
         Commands::Track { subvol } => {
             let mut node_config = NodeConfig::load()?;
