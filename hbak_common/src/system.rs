@@ -3,6 +3,7 @@ use crate::proto::{BACKUP_DIR, SNAPSHOT_DIR};
 use crate::LocalNodeError;
 
 use std::fs;
+use std::io::BufRead;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::process::Command;
@@ -116,6 +117,38 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
         .success()
     {
         return Err(LocalNodeError::BtrfsCmd);
+    }
+
+    let output = Command::new("btrfs")
+        .arg("subvolume")
+        .arg("list")
+        .arg("-o")
+        .arg(SNAPSHOT_DIR)
+        .output()?;
+    if !output.status.success() {
+        return Err(LocalNodeError::BtrfsCmd);
+    }
+
+    let subvols = output.stdout.lines().map(|line| match line {
+        Ok(line) => Ok(Path::new(MOUNTPOINT).join(
+            line.split_whitespace()
+                .next_back()
+                .expect("String splitting yields at least one item"),
+        )),
+        Err(e) => Err(e),
+    });
+
+    for subvol in subvols {
+        if !Command::new("btrfs")
+            .arg("subvolume")
+            .arg("delete")
+            .arg(subvol?)
+            .spawn()?
+            .wait()?
+            .success()
+        {
+            return Err(LocalNodeError::BtrfsCmd);
+        }
     }
 
     if !Command::new("btrfs")
