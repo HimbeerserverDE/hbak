@@ -352,6 +352,9 @@ dependencies = [
 [[package]]
 name = "hbakd"
 version = "0.1.0-dev"
+dependencies = [
+ "hbak_common",
+]
 
 [[package]]
 name = "heck"

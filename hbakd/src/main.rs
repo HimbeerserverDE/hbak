@@ -1,3 +1,40 @@
+use hbak_common::config::NodeConfig;
+use hbak_common::conn::DEFAULT_PORT;
+use hbak_common::{LocalNodeError, NetworkError};
+
+use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+
 fn main() {
-    println!("Hello, world!");
+    match serve() {
+        Ok(_) => {}
+        Err(e) => eprintln!("Error: {}", e),
+    }
+}
+
+fn serve() -> Result<(), LocalNodeError> {
+    let node_config = NodeConfig::load()?;
+    let bind_addr = node_config.bind_addr.unwrap_or(SocketAddr::new(
+        IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        DEFAULT_PORT,
+    ));
+
+    let listener = TcpListener::bind(bind_addr)?;
+
+    println!("[info] Listening on <{}>", bind_addr);
+
+    for stream in listener.incoming() {
+        let stream = stream?;
+        let peer_addr = stream.peer_addr()?;
+
+        match handle_client(stream) {
+            Ok(_) => {}
+            Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
+        }
+    }
+
+    unreachable!()
+}
+
+fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
+    todo!()
 }
