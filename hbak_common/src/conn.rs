@@ -148,12 +148,13 @@ impl AuthServ {
     pub fn secure_stream(
         self,
         auth_storage: impl IntoIterator<Item = RemoteNodeAuth>,
-    ) -> Result<StreamConn<Idle>, NetworkError> {
+    ) -> Result<(StreamConn<Idle>, RemoteNodeAuth), NetworkError> {
         // Consuming the `AuthServ` guarantees that this function can never be called again.
 
         let challenge = system::random_bytes(32);
         let nonce;
         let key;
+        let remote_node_auth;
         let remote_node_name;
 
         let client_proof;
@@ -166,7 +167,8 @@ impl AuthServ {
 
                 if let Some(auth) = auth {
                     nonce = hello.nonce;
-                    key = auth.key;
+                    key = auth.key.clone();
+                    remote_node_auth = auth;
                     remote_node_name = hello.node_name;
 
                     client_proof = system::hash_hmac(&key, &challenge);
@@ -174,7 +176,7 @@ impl AuthServ {
                     let proof = system::hash_hmac(&key, &hello.challenge);
 
                     self.send_message(&CryptoMessage::ServerAuth(Ok(ServerAuth {
-                        verifier: auth.verifier,
+                        verifier: remote_node_auth.verifier.clone(),
                         challenge,
                         proof,
                     })))?;
@@ -197,11 +199,9 @@ impl AuthServ {
 
                 if client_auth.proof.ct_eq(&client_proof).into() {
                     self.send_message(&CryptoMessage::Encrypt(Ok(())))?;
-                    Ok(StreamConn::from_conn(
-                        self.stream,
-                        key,
-                        nonce,
-                        remote_node_name,
+                    Ok((
+                        StreamConn::from_conn(self.stream, key, nonce, remote_node_name),
+                        remote_node_auth,
                     ))
                 } else {
                     self.send_message(&CryptoMessage::Encrypt(Err(RemoteError::AccessDenied)))?;
