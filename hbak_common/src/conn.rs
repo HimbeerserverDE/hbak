@@ -145,9 +145,9 @@ impl AuthServ {
     /// Performs mutual authentication and encryption of the connection
     /// using the provided authentication storage,
     /// returning a [`StreamConn`] on success.
-    pub fn secure_stream<A: IntoIterator<Item = RemoteNodeAuth>>(
+    pub fn secure_stream(
         self,
-        auth_storage: A,
+        auth_storage: impl IntoIterator<Item = RemoteNodeAuth>,
     ) -> Result<StreamConn<Idle>, NetworkError> {
         // Consuming the `AuthServ` guarantees that this function can never be called again.
 
