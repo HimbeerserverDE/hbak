@@ -5,6 +5,7 @@ use hbak_common::proto::LocalNode;
 use hbak_common::{LocalNodeError, NetworkError};
 
 use std::collections::HashMap;
+use std::fs::File;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 
@@ -77,5 +78,30 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
 
     let (stream_conn, remote_sync_info) = stream_conn.meta_sync(local_sync_info)?;
 
-    Ok(())
+    let mut tx = Vec::new();
+    for (volume, latest_snapshots) in remote_sync_info.volumes.into_iter().filter(|(volume, _)| {
+        remote_node_auth.pull.contains(volume) || volume.node_name() == remote_node_auth.node_name
+    }) {
+        let local_latest = node.latest_snapshots(volume.clone())?;
+
+        // Full backup: Local copy is more recent than remote copy.
+        if latest_snapshots.last_full <= local_latest.last_full {
+            for snapshot in node.backup_full_after(volume.clone(), latest_snapshots.last_full)? {
+                let file = File::open(snapshot.backup_path())?;
+                tx.push((file, snapshot));
+            }
+        }
+
+        // Incremental backup: Local copy is more recent than remote copy.
+        if latest_snapshots.last_incremental <= local_latest.last_incremental {
+            for snapshot in
+                node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+            {
+                let file = File::open(snapshot.backup_path())?;
+                tx.push((file, snapshot));
+            }
+        }
+    }
+
+    stream_conn.data_sync(tx, rx_setup)
 }

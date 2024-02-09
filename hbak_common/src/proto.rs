@@ -409,6 +409,34 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoIncrementalBackup(volume))
     }
 
+    /// Returns all locally known full backups of the specified volume
+    /// taken after the provided timestamp.
+    pub fn backup_full_after(
+        &self,
+        volume: Volume,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        Ok(self
+            .all_backups(Some(&volume))?
+            .into_iter()
+            .filter(|backup| !backup.is_incremental() && backup.taken() > after)
+            .collect())
+    }
+
+    /// Returns all locally known incremental backups of the specified volume
+    /// taken after the provided timestamp.
+    pub fn backup_incremental_after(
+        &self,
+        volume: Volume,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        Ok(self
+            .all_backups(Some(&volume))?
+            .into_iter()
+            .filter(|backup| backup.is_incremental() && backup.taken() > after)
+            .collect())
+    }
+
     /// Returns the latest locally known full and incremental backup timestamps
     /// in the form of a [`LatestSnapshots`] data structure.
     pub fn latest_snapshots(&self, volume: Volume) -> Result<LatestSnapshots, LocalNodeError> {
