@@ -1,11 +1,11 @@
 use crate::config::RemoteNodeAuth;
 use crate::message::*;
 use crate::proto::Snapshot;
-use crate::stream::{SnapshotStream, CHUNKSIZE};
+use crate::stream::CHUNKSIZE;
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::{BufRead, Write};
+use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
@@ -318,13 +318,13 @@ impl StreamConn<Idle> {
 }
 
 impl StreamConn<Active> {
-    /// Transmits the passed `SnapshotStream`s using their associated metadata.
+    /// Transmits the passed [`std::io::Read`]s using their associated metadata.
     /// Receives remote transmissions using the provided stream setup closure.
-    pub fn data_sync<B, W, I, F>(mut self, tx: I, rx_setup: F) -> Result<(), NetworkError>
+    pub fn data_sync<R, W, I, F>(mut self, tx: I, rx_setup: F) -> Result<(), NetworkError>
     where
-        B: BufRead,
+        R: Read,
         W: Write,
-        I: IntoIterator<Item = (SnapshotStream<B>, Snapshot)>,
+        I: IntoIterator<Item = (R, Snapshot)>,
         F: Fn(&str, Snapshot) -> Result<W, RemoteError>,
     {
         let mut stream = None;
@@ -380,21 +380,20 @@ impl StreamConn<Active> {
             Ok(())
         };
 
-        let send_chunk = |stream_conn: &mut Self,
-                          snapshot_stream: &mut SnapshotStream<B>|
-         -> Result<bool, NetworkError> {
-            let mut chunk = [0; CHUNKSIZE];
-            let n = snapshot_stream.read_data(&mut chunk)?;
-            let chunk = &chunk[..n];
+        let send_chunk =
+            |stream_conn: &mut Self, snapshot_stream: &mut R| -> Result<bool, NetworkError> {
+                let mut chunk = [0; CHUNKSIZE];
+                let n = snapshot_stream.read(&mut chunk)?;
+                let chunk = &chunk[..n];
 
-            if n > 0 {
-                stream_conn.send_message(&StreamMessage::Chunk(chunk.to_vec()))?;
-                Ok(true)
-            } else {
-                stream_conn.send_message(&StreamMessage::End(Ok(())))?;
-                Ok(false)
-            }
-        };
+                if n > 0 {
+                    stream_conn.send_message(&StreamMessage::Chunk(chunk.to_vec()))?;
+                    Ok(true)
+                } else {
+                    stream_conn.send_message(&StreamMessage::End(Ok(())))?;
+                    Ok(false)
+                }
+            };
 
         for (mut snapshot_stream, snapshot) in tx.into_iter() {
             self.send_message(&StreamMessage::Replicate(snapshot.into()))?;
