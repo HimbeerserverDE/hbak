@@ -172,6 +172,14 @@ impl Volume {
     pub fn subvol(&self) -> &str {
         &self.subvol
     }
+
+    /// Convenience wrapper for `Vec<String>` to `Vec<Volume>` conversion.
+    pub fn try_from_bulk(values: Vec<String>) -> Result<Vec<Self>, VolumeParseError> {
+        values
+            .into_iter()
+            .map(|value| Self::try_from(value.as_str()))
+            .collect()
+    }
 }
 
 impl fmt::Display for Volume {

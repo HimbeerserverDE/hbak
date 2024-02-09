@@ -2,7 +2,7 @@ mod error;
 use error::*;
 
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
-use hbak_common::proto::LocalNode;
+use hbak_common::proto::{LocalNode, Volume};
 use hbak_common::system;
 
 use std::net::SocketAddr;
@@ -137,7 +137,10 @@ fn logic() -> Result<()> {
             let mut node_config = NodeConfig::load()?;
 
             node_config.push.retain(|item| item.address != address);
-            node_config.push.push(RemoteNode { address, volumes });
+            node_config.push.push(RemoteNode {
+                address,
+                volumes: Volume::try_from_bulk(volumes)?,
+            });
             node_config.save()?;
         }
         Commands::RmPush { address } => {
@@ -157,7 +160,10 @@ fn logic() -> Result<()> {
             let mut node_config = NodeConfig::load()?;
 
             node_config.pull.retain(|item| item.address != address);
-            node_config.pull.push(RemoteNode { address, volumes });
+            node_config.pull.push(RemoteNode {
+                address,
+                volumes: Volume::try_from_bulk(volumes)?,
+            });
             node_config.save()?;
         }
         Commands::RmPull { address } => {
@@ -191,8 +197,8 @@ fn logic() -> Result<()> {
                 node_name,
                 verifier,
                 key,
-                push,
-                pull,
+                push: Volume::try_from_bulk(push)?,
+                pull: Volume::try_from_bulk(pull)?,
             });
             node_config.save()?;
         }
@@ -209,8 +215,8 @@ fn logic() -> Result<()> {
 
             for item in &mut node_config.auth {
                 if item.node_name == node_name {
-                    item.push = push;
-                    item.pull = pull;
+                    item.push = Volume::try_from_bulk(push)?;
+                    item.pull = Volume::try_from_bulk(pull)?;
 
                     break;
                 }

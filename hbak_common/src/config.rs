@@ -1,3 +1,4 @@
+use crate::proto::Volume;
 use crate::LocalNodeError;
 
 use std::fs::{File, OpenOptions};
@@ -89,7 +90,7 @@ pub struct RemoteNode {
     /// The network address and port of the node to push to.
     pub address: String,
     /// The volumes to interact with, see above for details.
-    pub volumes: Vec<String>,
+    pub volumes: Vec<Volume>,
 }
 
 /// A `RemoteNodeAuth` defines authentication and authorization details
@@ -104,7 +105,7 @@ pub struct RemoteNodeAuth {
     pub key: Vec<u8>,
     /// The volumes the remote node is allowed to push.
     /// Must not include subvolumes owned by the local node.
-    pub push: Vec<String>,
+    pub push: Vec<Volume>,
     /// The volumes the remote node is allowed to pull.
-    pub pull: Vec<String>,
+    pub pull: Vec<Volume>,
 }

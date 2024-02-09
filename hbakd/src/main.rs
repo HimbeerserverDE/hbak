@@ -1,7 +1,7 @@
 use hbak_common::config::NodeConfig;
 use hbak_common::conn::{AuthServ, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
-use hbak_common::proto::{LocalNode, Volume};
+use hbak_common::proto::LocalNode;
 use hbak_common::{LocalNodeError, NetworkError};
 
 use std::collections::HashMap;
@@ -69,12 +69,7 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         volumes: HashMap::new(),
     };
 
-    for interest in remote_node_auth
-        .push
-        .iter()
-        .chain(remote_node_auth.pull.iter())
-    {
-        let volume = Volume::try_from(interest.as_str())?;
+    for volume in remote_node_auth.push.into_iter() {
         let latest_snapshots = node.latest_snapshots(volume.clone())?;
 
         local_sync_info.volumes.insert(volume, latest_snapshots);

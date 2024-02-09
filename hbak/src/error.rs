@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("An error has occured on the local node: {0}")]
     HbakLocalNode(#[from] hbak_common::LocalNodeError),
+    #[error("Unable to parse volume identifier: {0}")]
+    HbakVolumeParse(#[from] hbak_common::VolumeParseError),
 
     #[allow(clippy::enum_variant_names)]
     #[error("IO error: {0}")]
