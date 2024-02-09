@@ -6,6 +6,7 @@ use hbak_common::{LocalNodeError, NetworkError};
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::BufReader;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 
@@ -89,11 +90,11 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
             let snapshot = node.latest_backup_full(volume.clone())?;
             let file = File::open(snapshot.backup_path())?;
 
-            tx.push((file, snapshot));
+            tx.push((BufReader::new(file), snapshot));
         } else if latest_snapshots.last_full <= local_latest.last_full {
             for snapshot in node.backup_full_after(volume.clone(), latest_snapshots.last_full)? {
                 let file = File::open(snapshot.backup_path())?;
-                tx.push((file, snapshot));
+                tx.push((BufReader::new(file), snapshot));
             }
         }
 
@@ -108,7 +109,7 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
 
         for snapshot in incr {
             let file = File::open(snapshot.backup_path())?;
-            tx.push((file, snapshot));
+            tx.push((BufReader::new(file), snapshot));
         }
     }
 
