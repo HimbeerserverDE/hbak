@@ -320,12 +320,18 @@ impl StreamConn<Idle> {
 impl StreamConn<Active> {
     /// Transmits the passed [`std::io::Read`]s using their associated metadata.
     /// Receives remote transmissions using the provided stream setup closure.
-    pub fn data_sync<R, W, I, F>(mut self, tx: I, rx_setup: F) -> Result<(), NetworkError>
+    pub fn data_sync<R, W, I, S, F>(
+        mut self,
+        tx: I,
+        rx_setup: S,
+        rx_finish: F,
+    ) -> Result<(), NetworkError>
     where
         R: Read,
         W: Write,
         I: IntoIterator<Item = (R, Snapshot)>,
-        F: Fn(Snapshot) -> Result<W, RemoteError>,
+        S: Fn(&Snapshot) -> Result<W, RemoteError>,
+        F: Fn(Snapshot) -> Result<(), RemoteError>,
     {
         let mut stream = None;
 
@@ -334,9 +340,9 @@ impl StreamConn<Active> {
                 StreamMessage::Stream(stream) => stream?,
                 StreamMessage::Replicate(replicate) => {
                     if stream.is_none() {
-                        match rx_setup(replicate.snapshot) {
+                        match rx_setup(&replicate.snapshot) {
                             Ok(w) => {
-                                stream = Some(w);
+                                stream = Some((w, replicate.snapshot));
                                 stream_conn.send_message(&StreamMessage::Stream(Ok(())))?;
                             }
                             Err(e) => {
@@ -352,7 +358,7 @@ impl StreamConn<Active> {
                 }
                 StreamMessage::Chunk(chunk) => {
                     if let Some(stream) = &mut stream {
-                        match stream.write_all(&chunk) {
+                        match stream.0.write_all(&chunk) {
                             Ok(_) => {}
                             Err(e) => {
                                 stream_conn
@@ -367,7 +373,16 @@ impl StreamConn<Active> {
                 }
                 StreamMessage::End(end) => {
                     end?;
-                    stream = None;
+
+                    if let Some(current_stream) = stream.take() {
+                        if let Err(e) = rx_finish(current_stream.1) {
+                            stream_conn.send_message(&StreamMessage::Error(e.clone()))?;
+                            return Err(e.into());
+                        }
+                    } else {
+                        stream_conn
+                            .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
+                    }
                 }
                 StreamMessage::Error(e) => return Err(e.into()),
                 _ => {
