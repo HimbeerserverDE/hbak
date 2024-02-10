@@ -8,6 +8,8 @@ use crate::{NetworkError, RemoteError};
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
+use std::sync::{Mutex, RwLock};
+use std::thread;
 use std::time::Duration;
 
 use chacha20poly1305::aead::generic_array::GenericArray;
@@ -239,8 +241,8 @@ impl From<TcpStream> for AuthServ {
 /// using an [`AuthConn`] or an [`AuthServ`].
 pub struct StreamConn<P: Phase> {
     stream: TcpStream,
-    encryptor: EncryptorBE32<XChaCha20Poly1305>,
-    decryptor: DecryptorBE32<XChaCha20Poly1305>,
+    encryptor: RwLock<EncryptorBE32<XChaCha20Poly1305>>,
+    decryptor: RwLock<DecryptorBE32<XChaCha20Poly1305>>,
     remote_node_name: String,
     _phase: PhantomData<P>,
 }
@@ -251,9 +253,13 @@ impl<P: Phase> StreamConn<P> {
         &self.remote_node_name
     }
 
-    fn send_message(&mut self, message: &StreamMessage) -> Result<(), NetworkError> {
+    fn send_message(&self, message: &StreamMessage) -> Result<(), NetworkError> {
         let plaintext = bincode::serialize(message)?;
-        let ciphertext = self.encryptor.encrypt_next(plaintext.as_slice())?;
+        let ciphertext = self
+            .encryptor
+            .write()
+            .unwrap()
+            .encrypt_next(plaintext.as_slice())?;
 
         let buf = bincode::serialize(&RawMessage(ciphertext))?;
         (&self.stream).write_all(&buf)?;
@@ -261,9 +267,13 @@ impl<P: Phase> StreamConn<P> {
         Ok(())
     }
 
-    fn recv_message(&mut self) -> Result<StreamMessage, NetworkError> {
+    fn recv_message(&self) -> Result<StreamMessage, NetworkError> {
         let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
-        let plaintext = self.decryptor.decrypt_next(ciphertext.0.as_slice())?;
+        let plaintext = self
+            .decryptor
+            .write()
+            .unwrap()
+            .decrypt_next(ciphertext.0.as_slice())?;
 
         Ok(bincode::deserialize(&plaintext)?)
     }
@@ -283,8 +293,8 @@ impl StreamConn<Idle> {
 
         Self {
             stream,
-            encryptor: EncryptorBE32::new(key, nonce),
-            decryptor: DecryptorBE32::new(key, nonce),
+            encryptor: RwLock::new(EncryptorBE32::new(key, nonce)),
+            decryptor: RwLock::new(DecryptorBE32::new(key, nonce)),
             remote_node_name,
             _phase: PhantomData,
         }
@@ -293,7 +303,7 @@ impl StreamConn<Idle> {
     /// Exchanges synchronization information (timestamps), returning an `Active` `StreamConn`
     /// that can send and receive data.
     pub fn meta_sync(
-        mut self,
+        self,
         sync_info: SyncInfo,
     ) -> Result<(StreamConn<Active>, SyncInfo), NetworkError> {
         self.send_message(&StreamMessage::SyncInfo(sync_info))?;
@@ -321,22 +331,26 @@ impl StreamConn<Active> {
     /// Transmits the passed [`std::io::Read`]s using their associated metadata.
     /// Receives remote transmissions using the provided stream setup closure.
     pub fn data_sync<R, W, I, S, F>(
-        mut self,
+        self,
         tx: I,
         rx_setup: S,
         rx_finish: F,
     ) -> Result<(), NetworkError>
     where
         R: Read,
-        W: Write,
-        I: IntoIterator<Item = (R, Snapshot)>,
-        S: Fn(&Snapshot) -> Result<W, RemoteError>,
-        F: Fn(Snapshot) -> Result<(), RemoteError>,
+        W: Write + Send,
+        I: IntoIterator<Item = (R, Snapshot)> + Send,
+        S: Fn(&Snapshot) -> Result<W, RemoteError> + Sync,
+        F: Fn(Snapshot) -> Result<(), RemoteError> + Sync,
     {
+        let stream_conn = RwLock::new(self);
+
         let mut stream = None;
 
-        let mut handle = |stream_conn: &mut Self| -> Result<(), NetworkError> {
-            match stream_conn.recv_message()? {
+        let mut handle = |stream_conn: &mut Self,
+                          message: StreamMessage|
+         -> Result<bool, NetworkError> {
+            match message {
                 StreamMessage::Stream(stream) => stream?,
                 StreamMessage::Replicate(replicate) => {
                     if stream.is_none() {
@@ -384,6 +398,7 @@ impl StreamConn<Active> {
                             .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
                     }
                 }
+                StreamMessage::Done => return Ok(true),
                 StreamMessage::Error(e) => return Err(e.into()),
                 _ => {
                     stream_conn
@@ -392,11 +407,11 @@ impl StreamConn<Active> {
                 }
             }
 
-            Ok(())
+            Ok(false)
         };
 
         let send_chunk =
-            |stream_conn: &mut Self, snapshot_stream: &mut R| -> Result<bool, NetworkError> {
+            |stream_conn: &Self, snapshot_stream: &mut R| -> Result<bool, NetworkError> {
                 let mut chunk = [0; CHUNKSIZE];
                 let n = snapshot_stream.read(&mut chunk)?;
                 let chunk = &chunk[..n];
@@ -410,21 +425,48 @@ impl StreamConn<Active> {
                 }
             };
 
-        for (mut snapshot_stream, snapshot) in tx.into_iter() {
-            self.send_message(&StreamMessage::Replicate(snapshot.into()))?;
-            handle(&mut self)?;
+        let local_done = Mutex::new(false);
+        thread::scope(|s| {
+            let tx = s.spawn(|| -> Result<(), NetworkError> {
+                for (mut snapshot_stream, snapshot) in tx.into_iter() {
+                    stream_conn
+                        .read()
+                        .unwrap()
+                        .send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
-            while match send_chunk(&mut self, &mut snapshot_stream) {
-                Ok(is_data_left) => is_data_left,
-                Err(e) => {
-                    self.send_message(&StreamMessage::End(Err(RemoteError::TxError)))?;
-                    return Err(e);
+                    while match send_chunk(&stream_conn.read().unwrap(), &mut snapshot_stream) {
+                        Ok(is_data_left) => is_data_left,
+                        Err(e) => {
+                            stream_conn
+                                .read()
+                                .unwrap()
+                                .send_message(&StreamMessage::End(Err(RemoteError::TxError)))?;
+                            return Err(e);
+                        }
+                    } {}
                 }
-            } {
-                handle(&mut self)?;
-            }
-        }
 
-        todo!()
+                Ok(())
+            });
+            let rx = s.spawn(|| -> Result<(), NetworkError> {
+                let mut remote_done = false;
+
+                while !*local_done.lock().unwrap() || !remote_done {
+                    let message = stream_conn.read().unwrap().recv_message()?;
+
+                    if handle(&mut stream_conn.write().unwrap(), message)? {
+                        remote_done = true;
+                    }
+                }
+
+                Ok(())
+            });
+
+            tx.join().unwrap()?;
+            *local_done.lock().unwrap() = true;
+            rx.join().unwrap()?;
+
+            Ok(())
+        })
     }
 }

@@ -72,6 +72,8 @@ pub enum StreamMessage {
     Chunk(Vec<u8>),
     /// Transmission completed or failed.
     End(Result<(), RemoteError>),
+    /// No further transmissions will follow. Used for connection shutdown synchronization.
+    Done,
     /// Protocol error independent of the operation or state context.
     Error(RemoteError),
 }
