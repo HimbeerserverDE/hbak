@@ -18,6 +18,7 @@ use fork::{daemon, Fork};
 /// Background process to serve push and pull requests.
 struct Args {
     /// Stay attached to the terminal instead of daemonizing.
+    #[arg(short, long)]
     debug: bool,
 }
 
