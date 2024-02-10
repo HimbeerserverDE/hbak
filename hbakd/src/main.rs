@@ -5,7 +5,7 @@ use hbak_common::proto::{LocalNode, Node, Snapshot};
 use hbak_common::{LocalNodeError, NetworkError, RemoteError};
 
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::thread;
@@ -114,7 +114,7 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         }
     }
 
-    let rx_setup = |snapshot: Snapshot| {
+    let rx_setup = |snapshot: &Snapshot| {
         if !remote_node_auth
             .push
             .iter()
@@ -123,9 +123,18 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
             return Err(RemoteError::AccessDenied);
         }
 
-        let file = File::create(snapshot.backup_path()).map_err(|_| RemoteError::RxError)?;
+        if snapshot.backup_path().exists() {
+            return Err(RemoteError::Immutable);
+        }
+
+        let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
         Ok(file)
     };
 
-    stream_conn.data_sync(tx, rx_setup)
+    let rx_finish = |snapshot: Snapshot| {
+        fs::rename(snapshot.streaming_path(), snapshot.backup_path())
+            .map_err(|_| RemoteError::RxError)
+    };
+
+    stream_conn.data_sync(tx, rx_setup, rx_finish)
 }
