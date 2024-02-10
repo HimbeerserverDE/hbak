@@ -6,7 +6,7 @@ use hbak_common::{LocalNodeError, NetworkError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::BufReader;
+use std::io::{self, BufReader};
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 
@@ -30,10 +30,14 @@ fn main() {
             Ok(_) => {}
             Err(e) => eprintln!("Error: {}", e),
         }
-    } else if let Ok(Fork::Child) = daemon(false, false) {
-        match serve() {
-            Ok(_) => {}
-            Err(e) => eprintln!("Error: {}", e),
+    } else {
+        match daemon(false, false) {
+            Ok(Fork::Parent(_)) => {}
+            Ok(Fork::Child) => match serve() {
+                Ok(_) => {}
+                Err(e) => eprintln!("Error: {}", e),
+            },
+            Err(e) => eprintln!("Error: {}", io::Error::from_raw_os_error(e)),
         }
     }
 }
