@@ -325,7 +325,7 @@ impl StreamConn<Active> {
         R: Read,
         W: Write,
         I: IntoIterator<Item = (R, Snapshot)>,
-        F: Fn(&str, Snapshot) -> Result<W, RemoteError>,
+        F: Fn(Snapshot) -> Result<W, RemoteError>,
     {
         let mut stream = None;
 
@@ -334,7 +334,7 @@ impl StreamConn<Active> {
                 StreamMessage::Stream(stream) => stream?,
                 StreamMessage::Replicate(replicate) => {
                     if stream.is_none() {
-                        match rx_setup(stream_conn.remote_node_name(), replicate.snapshot) {
+                        match rx_setup(replicate.snapshot) {
                             Ok(w) => {
                                 stream = Some(w);
                                 stream_conn.send_message(&StreamMessage::Stream(Ok(())))?;
