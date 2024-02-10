@@ -3,6 +3,7 @@ use crate::stream::{RecoveryStream, SnapshotStream};
 use crate::system::MOUNTPOINT;
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
@@ -61,7 +62,7 @@ impl Snapshot {
         path_buf
     }
 
-    /// Converts the `Snapshots` to its remote storage location,
+    /// Converts the `Snapshot` to its remote storage location,
     /// i.e. a member of the `/mnt/hbak/backups` directory
     /// where other nodes may store it.
     pub fn backup_path(&self) -> PathBuf {
@@ -69,6 +70,24 @@ impl Snapshot {
 
         path_buf.push(BACKUP_DIR);
         path_buf.push(self.to_string());
+
+        path_buf
+    }
+
+    /// Converts the `Snapshot` to its temporary remote storage location,
+    /// i.e. a member of the `/mnt/hbak/backups` directory
+    /// where other nodes may store it until the transmission is complete.
+    ///
+    /// It is suffixed with the `.part` file extension and won't be treated
+    /// as a backup by methods like [`LocalNode::all_backups`].
+    /// This behavior allows partial or failed transmissions to be retried
+    /// and is used to prevent (malicious) overwriting of existing snapshots
+    /// that have fully been written.
+    pub fn streaming_path(&self) -> PathBuf {
+        let mut path_buf = PathBuf::new();
+
+        path_buf.push(BACKUP_DIR);
+        path_buf.push(format!("{self}.part"));
 
         path_buf
     }
@@ -380,11 +399,15 @@ impl LocalNode {
 
         let backups = fs::read_dir(BACKUP_DIR)?;
         for backup in backups {
-            let snapshot = Snapshot::try_from(&*backup?.path())?;
+            let backup = backup?;
 
-            match volume {
-                Some(volume) if !snapshot.is_of_volume(volume) => {}
-                _ => all_backups.push(snapshot),
+            if backup.path().extension() != Some(OsStr::new("part")) {
+                let snapshot = Snapshot::try_from(&*backup.path())?;
+
+                match volume {
+                    Some(volume) if !snapshot.is_of_volume(volume) => {}
+                    _ => all_backups.push(snapshot),
+                }
             }
         }
 

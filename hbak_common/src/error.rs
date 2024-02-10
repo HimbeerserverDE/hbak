@@ -171,6 +171,11 @@ pub enum RemoteError {
     #[error("Remote node is unauthorized")]
     Unauthorized,
 
+    /// The backup has already been fully transferred
+    /// and cannot be overwritten again for security reasons.
+    #[error("Backup already transferred completely")]
+    Immutable,
+
     /// A network transmission represents an illegal state transition on the remote node.
     #[error("Illegal state transition on remote node")]
     IllegalTransition,
