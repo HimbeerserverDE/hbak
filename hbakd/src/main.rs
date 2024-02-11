@@ -51,14 +51,14 @@ fn serve() -> Result<(), LocalNodeError> {
 
     let listener = TcpListener::bind(bind_addr)?;
 
-    println!("[info] Listening on <{}>", bind_addr);
+    println!("[info] <{}> Listening", bind_addr);
 
     for stream in listener.incoming() {
         let stream = stream?;
         let peer_addr = stream.peer_addr()?;
 
         thread::spawn(move || match handle_client(stream) {
-            Ok(_) => {}
+            Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
             Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
         });
     }
@@ -67,10 +67,17 @@ fn serve() -> Result<(), LocalNodeError> {
 }
 
 fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
+    let peer_addr = stream.peer_addr()?;
+
     let node = LocalNode::new()?;
 
     let auth_serv = AuthServ::from(stream);
     let (stream_conn, remote_node_auth) = auth_serv.secure_stream(node.config().auth.clone())?;
+
+    println!(
+        "[info] <{}@{}> Authentication successful",
+        remote_node_auth.node_name, peer_addr
+    );
 
     let mut local_sync_info = SyncInfo {
         volumes: HashMap::new(),
@@ -119,6 +126,13 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         }
     }
 
+    for (_, snapshot) in &tx {
+        println!(
+            "[info] <{}@{}> Queueing {} for transmission",
+            remote_node_auth.node_name, peer_addr, snapshot
+        );
+    }
+
     let rx_setup = |snapshot: &Snapshot| {
         if !remote_node_auth
             .push
@@ -133,12 +147,25 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         }
 
         let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
+
+        println!(
+            "[info] <{}@{}> Receiving {}",
+            remote_node_auth.node_name, peer_addr, snapshot
+        );
+
         Ok(file)
     };
 
     let rx_finish = |snapshot: Snapshot| {
         fs::rename(snapshot.streaming_path(), snapshot.backup_path())
-            .map_err(|_| RemoteError::RxError)
+            .map_err(|_| RemoteError::RxError)?;
+
+        println!(
+            "[info] <{}@{}> Received {}",
+            remote_node_auth.node_name, peer_addr, snapshot
+        );
+
+        Ok(())
     };
 
     stream_conn.data_sync(tx, rx_setup, rx_finish)
