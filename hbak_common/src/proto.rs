@@ -358,6 +358,34 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoFullSnapshot(subvol))
     }
 
+    /// Returns all full snapshots of the specified subvolume of this node
+    /// taken after the provided timestamp.
+    pub fn snapshot_full_after(
+        &self,
+        subvol: String,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        Ok(self
+            .all_snapshots(subvol)?
+            .into_iter()
+            .filter(|snapshot| !snapshot.is_incremental() && snapshot.taken() > after)
+            .collect())
+    }
+
+    /// Returns all incremental snapshots of the specified subvolume of this node
+    /// taken after the provided timestamp.
+    pub fn snapshot_incremental_after(
+        &self,
+        subvol: String,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        Ok(self
+            .all_snapshots(subvol)?
+            .into_iter()
+            .filter(|snapshot| snapshot.is_incremental() && snapshot.taken() > after)
+            .collect())
+    }
+
     /// Returns a new [`crate::stream::SnapshotStream`]
     /// wrapping the provided [`Snapshot`].
     /// It is an error to call this method on a foreign [`Snapshot`].
@@ -415,7 +443,7 @@ impl LocalNode {
     }
 
     /// Returns all backups that have been synchronized to this node
-    /// of the specified volume or all volumes.
+    /// of the specified [`Volume`] or all volumes.
     pub fn all_backups(&self, volume: Option<&Volume>) -> Result<Vec<Snapshot>, LocalNodeError> {
         let mut all_backups = Vec::new();
 
@@ -436,7 +464,7 @@ impl LocalNode {
         Ok(all_backups)
     }
 
-    /// Returns the latest locally known full backup of the specified volume.
+    /// Returns the latest locally known full backup of the specified [`Volume`].
     pub fn latest_backup_full(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
         self.all_backups(Some(&volume))?
             .into_iter()
@@ -445,7 +473,7 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoFullBackup(volume))
     }
 
-    /// Returns the latest locally known incremental backup of the specified volume.
+    /// Returns the latest locally known incremental backup of the specified [`Volume`].
     pub fn latest_backup_incremental(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
         self.all_backups(Some(&volume))?
             .into_iter()
@@ -454,7 +482,7 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoIncrementalBackup(volume))
     }
 
-    /// Returns all locally known full backups of the specified volume
+    /// Returns all locally known full backups of the specified [`Volume`]
     /// taken after the provided timestamp.
     pub fn backup_full_after(
         &self,
@@ -468,7 +496,7 @@ impl LocalNode {
             .collect())
     }
 
-    /// Returns all locally known incremental backups of the specified volume
+    /// Returns all locally known incremental backups of the specified [`Volume`]
     /// taken after the provided timestamp.
     pub fn backup_incremental_after(
         &self,
@@ -480,6 +508,36 @@ impl LocalNode {
             .into_iter()
             .filter(|backup| backup.is_incremental() && backup.taken() > after)
             .collect())
+    }
+
+    /// Returns all locally know full backups or snapshots of the specified volume
+    /// taken after the provided timestamp. Checks the correct location
+    /// depending on whether the `LocalNode` owns the [`Volume`].
+    pub fn all_full_after(
+        &self,
+        volume: Volume,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        if volume.node_name() == self.name() {
+            self.snapshot_full_after(volume.subvol().to_string(), after)
+        } else {
+            self.backup_full_after(volume, after)
+        }
+    }
+
+    /// Returns all locally know incremental backups or snapshots of the specified volume
+    /// taken after the provided timestamp. Checks the correct location
+    /// depending on whether the `LocalNode` owns the [`Volume`].
+    pub fn all_incremental_after(
+        &self,
+        volume: Volume,
+        after: NaiveDateTime,
+    ) -> Result<Vec<Snapshot>, LocalNodeError> {
+        if volume.node_name() == self.name() {
+            self.snapshot_incremental_after(volume.subvol().to_string(), after)
+        } else {
+            self.backup_incremental_after(volume, after)
+        }
     }
 
     /// Returns the latest locally known full and incremental backup timestamps
