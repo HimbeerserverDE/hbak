@@ -252,16 +252,20 @@ fn logic() -> Result<()> {
         } => {
             let local_node = LocalNode::new()?;
 
-            if let Some(foreign) = subvols
-                .iter()
-                .find(|subvol| !local_node.owns_subvol(subvol))
-            {
+            let mut subvols = if subvols.is_empty() {
+                &local_node.config().subvols
+            } else {
+                &subvols
+            }
+            .iter();
+
+            if let Some(foreign) = subvols.find(|subvol| !local_node.owns_subvol(subvol)) {
                 return Err(LocalNodeError::ForeignSubvolume(foreign.clone()).into());
             }
 
             for subvol in subvols {
                 println!("Snapshotting {}...", subvol);
-                local_node.snapshot_now(subvol, incremental)?;
+                local_node.snapshot_now(subvol.clone(), incremental)?;
             }
         }
     }
