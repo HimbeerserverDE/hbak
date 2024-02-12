@@ -490,7 +490,7 @@ impl LocalNode {
 
     /// Writes the provided [`crate::stream::RecoveryStream`]
     /// to the correct local snapshot.
-    pub fn recover<B: BufRead>(&self, stream: RecoveryStream<B>) -> Result<(), LocalNodeError> {
+    pub fn recover<B: BufRead>(&self, mut stream: RecoveryStream<B>) -> Result<(), LocalNodeError> {
         let dst = SNAPSHOT_DIR;
         let mut cmd = Command::new("btrfs")
             .arg("receive")
@@ -498,9 +498,12 @@ impl LocalNode {
             .stdin(Stdio::piped())
             .spawn()?;
 
-        if let Err(e) = stream.write_to(cmd.stdin.as_mut().ok_or(LocalNodeError::NoBtrfsInput)?) {
+        if let Err(e) = io::copy(
+            &mut stream,
+            cmd.stdin.as_mut().ok_or(LocalNodeError::NoBtrfsInput)?,
+        ) {
             cmd.kill()?;
-            return Err(e);
+            return Err(e.into());
         }
         cmd.stdin = None; // Make sure `btrfs receive` doesn't deadlock.
 
