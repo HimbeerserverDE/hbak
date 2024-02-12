@@ -587,11 +587,13 @@ impl LocalNode {
             last_full: match self.latest_full(volume.clone()) {
                 Ok(snapshot) => snapshot.taken(),
                 Err(LocalNodeError::NoFullSnapshot(_)) => NaiveDateTime::MIN,
+                Err(LocalNodeError::NoFullBackup(_)) => NaiveDateTime::MIN,
                 Err(e) => return Err(e),
             },
             last_incremental: match self.latest_incremental(volume) {
                 Ok(snapshot) => snapshot.taken(),
                 Err(LocalNodeError::NoIncrementalSnapshot(_)) => NaiveDateTime::MIN,
+                Err(LocalNodeError::NoIncrementalBackup(_)) => NaiveDateTime::MIN,
                 Err(e) => return Err(e),
             },
         })
