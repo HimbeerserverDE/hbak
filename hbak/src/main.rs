@@ -449,12 +449,12 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
             return Err(RemoteError::Immutable);
         }
 
-        let (child, w) = local_node.recover().map_err(|_| RemoteError::RxError)?;
+        let (child, recovery_stream) = local_node.recover().map_err(|_| RemoteError::RxError)?;
         children.lock().unwrap().insert(snapshot.clone(), child);
 
         println!("Receiving {} from {}", snapshot, address);
 
-        Ok(w)
+        Ok(recovery_stream)
     };
 
     let rx_finish = |snapshot: Snapshot| {
