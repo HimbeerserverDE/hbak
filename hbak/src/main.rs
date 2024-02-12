@@ -4,11 +4,13 @@ use error::*;
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::conn::{AuthConn, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
-use hbak_common::proto::{LocalNode, Node, Volume};
+use hbak_common::proto::{LocalNode, Node, Snapshot, Volume};
 use hbak_common::system;
-use hbak_common::LocalNodeError;
+use hbak_common::{LocalNodeError, RemoteError};
 
 use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::net::SocketAddr;
 
 use clap::{Parser, Subcommand};
@@ -303,16 +305,78 @@ fn sync(
         volumes: HashMap::new(),
     };
 
-    for volume in &remote_node.push {
-        if push.is_empty() || push.contains(&volume.to_string()) {
-            let latest_snapshots = local_node.latest_snapshots(volume.clone())?;
-            local_sync_info
-                .volumes
-                .insert(volume.clone(), latest_snapshots);
-        }
+    for volume in remote_node
+        .pull
+        .iter()
+        .filter(|volume| volume.node_name() != local_node.name())
+        .filter(|volume| pull.is_empty() || pull.contains(&volume.to_string()))
+    {
+        let latest_snapshots = local_node.latest_snapshots(volume.clone())?;
+        local_sync_info
+            .volumes
+            .insert(volume.clone(), latest_snapshots);
     }
 
     let (stream_conn, remote_sync_info) = stream_conn.meta_sync(local_sync_info)?;
 
-    todo!()
+    let mut tx = Vec::new();
+    for (volume, latest_snapshots) in remote_sync_info
+        .volumes
+        .into_iter()
+        .filter(|(volume, _)| remote_node.push.contains(volume))
+        .filter(|(volume, _)| push.is_empty() || push.contains(&volume.to_string()))
+    {
+        // Full backup: Remote is out of date.
+        for snapshot in local_node.backup_full_after(volume.clone(), latest_snapshots.last_full)? {
+            let file = File::open(snapshot.backup_path())?;
+            tx.push((BufReader::new(file), snapshot));
+        }
+
+        // Incremental backup: Remote is out of date.
+        for snapshot in
+            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+        {
+            let file = File::open(snapshot.backup_path())?;
+            tx.push((BufReader::new(file), snapshot));
+        }
+    }
+
+    for (_, snapshot) in &tx {
+        println!(
+            "Queueing {} for transmission to {}",
+            snapshot, remote_node.address
+        );
+    }
+
+    let rx_setup =
+        |snapshot: &Snapshot| {
+            if !remote_node.pull.iter().any(|volume| {
+                snapshot.is_of_volume(volume) && volume.node_name() != local_node.name()
+            }) {
+                return Err(RemoteError::AccessDenied);
+            }
+
+            if snapshot.backup_path().exists() {
+                return Err(RemoteError::Immutable);
+            }
+
+            let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
+
+            println!("Receiving {} from {}", snapshot, remote_node.address);
+
+            Ok(file)
+        };
+
+    let rx_finish = |snapshot: Snapshot| {
+        fs::rename(snapshot.streaming_path(), snapshot.backup_path())
+            .map_err(|_| RemoteError::RxError)?;
+
+        println!("Received {} from {}", snapshot, remote_node.address);
+
+        Ok(())
+    };
+
+    stream_conn.data_sync(tx, rx_setup, rx_finish)?;
+
+    Ok(())
 }
