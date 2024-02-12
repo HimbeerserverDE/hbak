@@ -58,11 +58,11 @@ enum Commands {
         /// The network address and optional port of the remote node.
         address: String,
         /// The volumes to push to the remote node.
-        #[arg(long = "push")]
+        #[arg(long)]
         push: Vec<String>,
         /// The volumes to pull from the remote node.
         /// Subvolumes owned by the local node are silently ignored.
-        #[arg(long = "pull")]
+        #[arg(long)]
         pull: Vec<String>,
     },
     /// Remove a remote without deleting anything.
@@ -76,10 +76,10 @@ enum Commands {
         node_name: String,
         /// The volumes the remote node is allowed to push.
         /// Subvolumes owned by the local node are silently ignored.
-        #[arg(long = "push")]
+        #[arg(long)]
         push: Vec<String>,
         /// The volumes the remote node is allowed to pull.
-        #[arg(long = "pull")]
+        #[arg(long)]
         pull: Vec<String>,
     },
     /// Modify permissions for a remote client without changing the passphrase.
@@ -88,10 +88,10 @@ enum Commands {
         node_name: String,
         /// The volumes the remote node is allowed to push.
         /// Subvolumes owned by the local node are silently ignored.
-        #[arg(long = "push")]
+        #[arg(long)]
         push: Vec<String>,
         /// The volumes the remote node is allowed to pull.
-        #[arg(long = "pull")]
+        #[arg(long)]
         pull: Vec<String>,
     },
     /// Revoke a remote client all access and delete local configuration about it.
@@ -112,10 +112,10 @@ enum Commands {
     /// Synchronize snapshots with remote nodes.
     Synchronize {
         /// The volumes to limit pushing to.
-        #[arg(long = "push")]
+        #[arg(long)]
         push: Vec<String>,
         /// The volumes to limit pulling to.
-        #[arg(long = "pull")]
+        #[arg(long)]
         pull: Vec<String>,
         /// The network addresses and optional ports of the nodes to limit synchronization to.
         remote_nodes: Vec<String>,
