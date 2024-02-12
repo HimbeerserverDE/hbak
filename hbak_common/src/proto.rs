@@ -418,7 +418,7 @@ impl LocalNode {
 
     /// Returns a new [`Read`] wrapping the provided snapshot or backup.
     /// Performs encryption if exporting a local [`Snapshot`].
-    pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn Read>, LocalNodeError> {
+    pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn Read + Send>, LocalNodeError> {
         if self.owns_backup(snapshot) {
             Ok(Box::new(self.send_snapshot(snapshot)?))
         } else {
