@@ -10,7 +10,6 @@ use hbak_common::{LocalNodeError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::BufReader;
 use std::net::SocketAddr;
 
 use clap::{Parser, Subcommand};
@@ -327,17 +326,17 @@ fn sync(
         .filter(|(volume, _)| push.is_empty() || push.contains(&volume.to_string()))
     {
         // Full backup: Remote is out of date.
-        for snapshot in local_node.backup_full_after(volume.clone(), latest_snapshots.last_full)? {
-            let file = File::open(snapshot.backup_path())?;
-            tx.push((BufReader::new(file), snapshot));
+        for snapshot in local_node.all_full_after(volume.clone(), latest_snapshots.last_full)? {
+            let r = local_node.export(&snapshot)?;
+            tx.push((r, snapshot));
         }
 
         // Incremental backup: Remote is out of date.
         for snapshot in
-            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+            local_node.all_incremental_after(volume, latest_snapshots.last_incremental)?
         {
-            let file = File::open(snapshot.backup_path())?;
-            tx.push((BufReader::new(file), snapshot));
+            let r = local_node.export(&snapshot)?;
+            tx.push((r, snapshot));
         }
     }
 
