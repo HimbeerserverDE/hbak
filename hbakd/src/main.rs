@@ -69,10 +69,11 @@ fn serve() -> Result<(), LocalNodeError> {
 fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
     let peer_addr = stream.peer_addr()?;
 
-    let node = LocalNode::new()?;
+    let local_node = LocalNode::new()?;
 
     let auth_serv = AuthServ::from(stream);
-    let (stream_conn, remote_node_auth) = auth_serv.secure_stream(node.config().auth.clone())?;
+    let (stream_conn, remote_node_auth) =
+        auth_serv.secure_stream(local_node.config().auth.clone())?;
 
     println!(
         "[info] <{}@{}> Authentication successful",
@@ -84,7 +85,7 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
     };
 
     for volume in &remote_node_auth.push {
-        let latest_snapshots = node.latest_snapshots(volume.clone())?;
+        let latest_snapshots = local_node.latest_snapshots(volume.clone())?;
         local_sync_info
             .volumes
             .insert(volume.clone(), latest_snapshots);
@@ -96,16 +97,18 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
     for (volume, latest_snapshots) in remote_sync_info.volumes.into_iter().filter(|(volume, _)| {
         remote_node_auth.pull.contains(volume) || volume.node_name() == remote_node_auth.node_name
     }) {
-        let local_latest = node.latest_snapshots(volume.clone())?;
+        let local_latest = local_node.latest_snapshots(volume.clone())?;
 
         // Full backup: Either restoring or remote is out of date.
         if volume.node_name() == remote_node_auth.node_name {
-            let snapshot = node.latest_backup_full(volume.clone())?;
+            let snapshot = local_node.latest_backup_full(volume.clone())?;
             let file = File::open(snapshot.backup_path())?;
 
             tx.push((BufReader::new(file), snapshot));
         } else if latest_snapshots.last_full <= local_latest.last_full {
-            for snapshot in node.backup_full_after(volume.clone(), latest_snapshots.last_full)? {
+            for snapshot in
+                local_node.backup_full_after(volume.clone(), latest_snapshots.last_full)?
+            {
                 let file = File::open(snapshot.backup_path())?;
                 tx.push((BufReader::new(file), snapshot));
             }
@@ -113,9 +116,9 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
 
         // Incremental backup: Either restoring or remote is out of date.
         let incr = if volume.node_name() == remote_node_auth.node_name {
-            node.backup_incremental_after(volume, local_latest.last_full)?
+            local_node.backup_incremental_after(volume, local_latest.last_full)?
         } else if latest_snapshots.last_incremental <= local_latest.last_incremental {
-            node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
         } else {
             Vec::default()
         };
@@ -133,28 +136,27 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         );
     }
 
-    let rx_setup = |snapshot: &Snapshot| {
-        if !remote_node_auth
-            .push
-            .iter()
-            .any(|volume| snapshot.is_of_volume(volume) && volume.node_name() != node.name())
-        {
-            return Err(RemoteError::AccessDenied);
-        }
+    let rx_setup =
+        |snapshot: &Snapshot| {
+            if !remote_node_auth.push.iter().any(|volume| {
+                snapshot.is_of_volume(volume) && volume.node_name() != local_node.name()
+            }) {
+                return Err(RemoteError::AccessDenied);
+            }
 
-        if snapshot.backup_path().exists() {
-            return Err(RemoteError::Immutable);
-        }
+            if snapshot.backup_path().exists() {
+                return Err(RemoteError::Immutable);
+            }
 
-        let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
+            let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
 
-        println!(
-            "[info] <{}@{}> Receiving {}",
-            remote_node_auth.node_name, peer_addr, snapshot
-        );
+            println!(
+                "[info] <{}@{}> Receiving {}",
+                remote_node_auth.node_name, peer_addr, snapshot
+            );
 
-        Ok(file)
-    };
+            Ok(file)
+        };
 
     let rx_finish = |snapshot: Snapshot| {
         fs::rename(snapshot.streaming_path(), snapshot.backup_path())
