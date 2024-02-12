@@ -3,10 +3,12 @@ use error::*;
 
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::conn::{AuthConn, DEFAULT_PORT};
+use hbak_common::message::SyncInfo;
 use hbak_common::proto::{LocalNode, Node, Volume};
 use hbak_common::system;
 use hbak_common::LocalNodeError;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use clap::{Parser, Subcommand};
@@ -277,20 +279,40 @@ fn main() {
     }
 }
 
-fn sync(local_node: &LocalNode, node: &RemoteNode, push: &[String], pull: &[String]) -> Result<()> {
-    let address = match node.address.parse() {
+fn sync(
+    local_node: &LocalNode,
+    remote_node: &RemoteNode,
+    push: &[String],
+    pull: &[String],
+) -> Result<()> {
+    let address = match remote_node.address.parse() {
         Ok(address) => address,
-        Err(_) => SocketAddr::new(node.address.parse()?, DEFAULT_PORT),
+        Err(_) => SocketAddr::new(remote_node.address.parse()?, DEFAULT_PORT),
     };
 
     let auth_conn = AuthConn::new(&address)?;
     let stream_conn = auth_conn.secure_stream(
         local_node.name().to_string(),
-        node.address.to_string(),
+        remote_node.address.to_string(),
         &local_node.config().passphrase,
     )?;
 
-    println!("Authentication to {} successful", node.address);
+    println!("Authentication to {} successful", remote_node.address);
+
+    let mut local_sync_info = SyncInfo {
+        volumes: HashMap::new(),
+    };
+
+    for volume in &remote_node.push {
+        if push.is_empty() || push.contains(&volume.to_string()) {
+            let latest_snapshots = local_node.latest_snapshots(volume.clone())?;
+            local_sync_info
+                .volumes
+                .insert(volume.clone(), latest_snapshots);
+        }
+    }
+
+    let (stream_conn, remote_sync_info) = stream_conn.meta_sync(local_sync_info)?;
 
     todo!()
 }
