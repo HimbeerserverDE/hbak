@@ -4,6 +4,7 @@ use error::*;
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::proto::{LocalNode, Volume};
 use hbak_common::system;
+use hbak_common::LocalNodeError;
 
 use std::net::SocketAddr;
 
@@ -102,6 +103,14 @@ enum Commands {
     },
     /// Export a random verifier and key of the local encryption passphrase.
     ExportPass,
+    /// Take a (local) snapshot of the specified subvolumes.
+    Snapshot {
+        /// Take incremental snapshots rather than full snapshots.
+        #[arg(short, long)]
+        incremental: bool,
+        /// The subvolumes to take snapshots of.
+        subvols: Vec<String>,
+    },
 }
 
 fn logic() -> Result<()> {
@@ -236,6 +245,24 @@ fn logic() -> Result<()> {
 
             println!("Verifier: {}", hex::encode(verifier));
             println!("Key:      {}", hex::encode(key));
+        }
+        Commands::Snapshot {
+            incremental,
+            subvols,
+        } => {
+            let local_node = LocalNode::new()?;
+
+            if let Some(foreign) = subvols
+                .iter()
+                .find(|subvol| !local_node.owns_subvol(subvol))
+            {
+                return Err(LocalNodeError::ForeignSubvolume(foreign.clone()).into());
+            }
+
+            for subvol in subvols {
+                println!("Snapshotting {}...", subvol);
+                local_node.snapshot_now(subvol, incremental)?;
+            }
         }
     }
 
