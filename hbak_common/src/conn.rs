@@ -70,7 +70,7 @@ impl AuthConn {
         // Consuming the `AuthConn` guarantees that this function can never be called again.
 
         let challenge = system::random_bytes(32);
-        let nonce = system::random_bytes(32);
+        let nonce = system::random_bytes(19);
         let key;
 
         self.send_message(&CryptoMessage::Hello(Hello {
