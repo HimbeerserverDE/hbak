@@ -58,9 +58,11 @@ enum Commands {
         /// The network address and optional port of the remote node.
         address: String,
         /// The volumes to push to the remote node.
+        #[arg(long = "push")]
         push: Vec<String>,
         /// The volumes to pull from the remote node.
         /// Subvolumes owned by the local node are silently ignored.
+        #[arg(long = "pull")]
         pull: Vec<String>,
     },
     /// Remove a remote without deleting anything.
