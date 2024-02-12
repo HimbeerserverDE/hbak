@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, net};
 
 use thiserror::Error;
 
@@ -6,9 +6,14 @@ use thiserror::Error;
 pub enum Error {
     #[error("An error has occured on the local node: {0}")]
     HbakLocalNode(#[from] hbak_common::LocalNodeError),
+    #[error("A network error has occured: {0}")]
+    HbakNetwork(#[from] hbak_common::NetworkError),
     #[error("Unable to parse volume identifier: {0}")]
     HbakVolumeParse(#[from] hbak_common::VolumeParseError),
 
+    #[allow(clippy::enum_variant_names)]
+    #[error("Unable to parse network address: {0}")]
+    AddrParseError(#[from] net::AddrParseError),
     #[allow(clippy::enum_variant_names)]
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),

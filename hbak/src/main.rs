@@ -2,7 +2,8 @@ mod error;
 use error::*;
 
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
-use hbak_common::proto::{LocalNode, Volume};
+use hbak_common::conn::{AuthConn, DEFAULT_PORT};
+use hbak_common::proto::{LocalNode, Node, Volume};
 use hbak_common::system;
 use hbak_common::LocalNodeError;
 
@@ -252,7 +253,17 @@ fn logic() -> Result<()> {
             }
         }
         Commands::Synchronize { push, pull, nodes } => {
-            todo!()
+            let local_node = LocalNode::new()?;
+
+            for node in local_node
+                .config()
+                .remotes
+                .iter()
+                .filter(|item| nodes.is_empty() || nodes.contains(&item.address))
+            {
+                println!("Synchronizing with {}...", node.address);
+                sync(&local_node, node, &push, &pull)?;
+            }
         }
     }
 
@@ -264,4 +275,22 @@ fn main() {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
     }
+}
+
+fn sync(local_node: &LocalNode, node: &RemoteNode, push: &[String], pull: &[String]) -> Result<()> {
+    let address = match node.address.parse() {
+        Ok(address) => address,
+        Err(_) => SocketAddr::new(node.address.parse()?, DEFAULT_PORT),
+    };
+
+    let auth_conn = AuthConn::new(&address)?;
+    let stream_conn = auth_conn.secure_stream(
+        local_node.name().to_string(),
+        node.address.to_string(),
+        &local_node.config().passphrase,
+    )?;
+
+    println!("Authentication to {} successful", node.address);
+
+    todo!()
 }
