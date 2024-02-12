@@ -6,7 +6,7 @@ use hbak_common::{LocalNodeError, NetworkError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{self, BufReader};
+use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 
@@ -100,15 +100,13 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
         // Full backup: Either restoring or remote is out of date.
         if volume.node_name() == remote_node_auth.node_name {
             let snapshot = local_node.latest_backup_full(volume.clone())?;
-            let file = File::open(snapshot.backup_path())?;
+            let r = local_node.export(&snapshot)?;
 
-            tx.push((BufReader::new(file), snapshot));
+            tx.push((r, snapshot));
         } else {
-            for snapshot in
-                local_node.backup_full_after(volume.clone(), latest_snapshots.last_full)?
-            {
-                let file = File::open(snapshot.backup_path())?;
-                tx.push((BufReader::new(file), snapshot));
+            for snapshot in local_node.all_full_after(volume.clone(), latest_snapshots.last_full)? {
+                let r = local_node.export(&snapshot)?;
+                tx.push((r, snapshot));
             }
         }
 
@@ -119,12 +117,12 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
                 local_node.latest_backup_full(volume)?.taken(),
             )?
         } else {
-            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+            local_node.all_incremental_after(volume, latest_snapshots.last_incremental)?
         };
 
         for snapshot in incr {
-            let file = File::open(snapshot.backup_path())?;
-            tx.push((BufReader::new(file), snapshot));
+            let r = local_node.export(&snapshot)?;
+            tx.push((r, snapshot));
         }
     }
 
