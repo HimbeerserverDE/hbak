@@ -108,8 +108,19 @@ enum Commands {
         /// Take incremental snapshots rather than full snapshots.
         #[arg(short, long)]
         incremental: bool,
-        /// The subvolumes to take snapshots of.
+        /// The subvolumes to limit snapshotting to.
         subvols: Vec<String>,
+    },
+    /// Synchronize snapshots with remote nodes.
+    Synchronize {
+        /// The volumes to limit pushing to.
+        #[arg(long = "push")]
+        push: Vec<String>,
+        /// The volumes to limit pulling to.
+        #[arg(long = "pull")]
+        pull: Vec<String>,
+        /// The nodes to limit synchronization to.
+        nodes: Vec<String>,
     },
 }
 
@@ -267,6 +278,9 @@ fn logic() -> Result<()> {
                 println!("Snapshotting {}...", subvol);
                 local_node.snapshot_now(subvol.clone(), incremental)?;
             }
+        }
+        Commands::Synchronize { push, pull, nodes } => {
+            todo!()
         }
     }
 
