@@ -159,6 +159,17 @@ pub struct LatestSnapshots {
     pub last_incremental: NaiveDateTime,
 }
 
+impl LatestSnapshots {
+    /// Returns a `LatestSnapshots` that signifies that no snapshots exist.
+    /// Only useful when restoring.
+    pub fn none() -> Self {
+        Self {
+            last_full: NaiveDateTime::MIN,
+            last_incremental: NaiveDateTime::MIN,
+        }
+    }
+}
+
 /// A `Volume` is a unique combination of btrfs subvolume and host name.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Volume {
