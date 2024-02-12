@@ -97,15 +97,13 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
     for (volume, latest_snapshots) in remote_sync_info.volumes.into_iter().filter(|(volume, _)| {
         remote_node_auth.pull.contains(volume) || volume.node_name() == remote_node_auth.node_name
     }) {
-        let local_latest = local_node.latest_snapshots(volume.clone())?;
-
         // Full backup: Either restoring or remote is out of date.
         if volume.node_name() == remote_node_auth.node_name {
             let snapshot = local_node.latest_backup_full(volume.clone())?;
             let file = File::open(snapshot.backup_path())?;
 
             tx.push((BufReader::new(file), snapshot));
-        } else if latest_snapshots.last_full <= local_latest.last_full {
+        } else {
             for snapshot in
                 local_node.backup_full_after(volume.clone(), latest_snapshots.last_full)?
             {
@@ -116,11 +114,12 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
 
         // Incremental backup: Either restoring or remote is out of date.
         let incr = if volume.node_name() == remote_node_auth.node_name {
-            local_node.backup_incremental_after(volume, local_latest.last_full)?
-        } else if latest_snapshots.last_incremental <= local_latest.last_incremental {
-            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
+            local_node.backup_incremental_after(
+                volume.clone(),
+                local_node.latest_backup_full(volume)?.taken(),
+            )?
         } else {
-            Vec::default()
+            local_node.backup_incremental_after(volume, latest_snapshots.last_incremental)?
         };
 
         for snapshot in incr {
