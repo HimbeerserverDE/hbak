@@ -94,6 +94,9 @@ pub enum LocalNodeError {
     /// No full snapshot of the specified subvolume could be found on this node.
     #[error("No full snapshots of subvolume \"{0}\" exist")]
     NoFullSnapshot(String),
+    /// No incremental snapshot of the specified subvolume could be found on this node.
+    #[error("No incremental snapshots of subvolume \"{0}\" exist")]
+    NoIncrementalSnapshot(String),
     /// A snapshot with the same identifier already exists.
     #[error("A snapshot with identifier \"{0}\" already exists")]
     SnapshotExists(Snapshot),

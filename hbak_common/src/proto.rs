@@ -358,6 +358,15 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoFullSnapshot(subvol))
     }
 
+    /// Returns the latest incremental snapshot of the specified subvolume of this node.
+    pub fn latest_snapshot_incremental(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
+        self.all_snapshots(subvol.clone())?
+            .into_iter()
+            .filter(|snapshot| snapshot.is_incremental())
+            .max_by_key(|snapshot| snapshot.taken())
+            .ok_or(LocalNodeError::NoIncrementalSnapshot(subvol))
+    }
+
     /// Returns all full snapshots of the specified subvolume of this node
     /// taken after the provided timestamp.
     pub fn snapshot_full_after(
@@ -540,12 +549,32 @@ impl LocalNode {
         }
     }
 
+    /// Returns the latest full snapshot or backup of the specified [`Volume`].
+    /// Checks the correct location depending on whether the `LocalNode` owns the [`Volume`].
+    pub fn latest_full(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
+        if volume.node_name() == self.name() {
+            self.latest_snapshot_full(volume.subvol().to_string())
+        } else {
+            self.latest_backup_full(volume)
+        }
+    }
+
+    /// Returns the latest incremental snapshot or backup of the specified [`Volume`].
+    /// Checks the correct location depending on whether the `LocalNode` owns the [`Volume`].
+    pub fn latest_incremental(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
+        if volume.node_name() == self.name() {
+            self.latest_snapshot_incremental(volume.subvol().to_string())
+        } else {
+            self.latest_backup_incremental(volume)
+        }
+    }
+
     /// Returns the latest locally known full and incremental backup timestamps
     /// in the form of a [`LatestSnapshots`] data structure.
     pub fn latest_snapshots(&self, volume: Volume) -> Result<LatestSnapshots, LocalNodeError> {
         Ok(LatestSnapshots {
-            last_full: self.latest_backup_full(volume.clone())?.taken(),
-            last_incremental: self.latest_backup_incremental(volume)?.taken(),
+            last_full: self.latest_full(volume.clone())?.taken(),
+            last_incremental: self.latest_incremental(volume)?.taken(),
         })
     }
 
