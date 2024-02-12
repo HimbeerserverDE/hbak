@@ -5,7 +5,7 @@ use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
@@ -382,13 +382,13 @@ impl LocalNode {
     /// to the specified local backup.
     pub fn backup<B: BufRead>(
         &self,
-        stream: SnapshotStream<B>,
+        mut stream: SnapshotStream<B>,
         snapshot: &Snapshot,
     ) -> Result<(), LocalNodeError> {
         let dst = snapshot.backup_path();
         let mut file = BufWriter::new(File::create(dst)?);
 
-        stream.write_to(&mut file)?;
+        io::copy(&mut stream, &mut file)?;
         Ok(())
     }
 
