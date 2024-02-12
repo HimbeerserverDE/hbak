@@ -19,7 +19,7 @@ pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
 
 /// A `Snapshot` uniquely identifies a full or incremental btrfs snapshot
 /// of a node via the node name, subvolume name and creation date.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
     node_name: String,
     subvol: String,
