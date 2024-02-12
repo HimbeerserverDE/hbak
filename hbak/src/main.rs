@@ -53,7 +53,7 @@ enum Commands {
     },
     /// Add or modify a remote to push to or pull from.
     AddRemote {
-        /// The network address and port of the remote node.
+        /// The network address and optional port of the remote node.
         address: String,
         /// The volumes to push to the remote node.
         push: Vec<String>,
@@ -63,7 +63,7 @@ enum Commands {
     },
     /// Remove a remote without deleting anything.
     RmRemote {
-        /// The network address and port of the node to forget.
+        /// The network address and optional port of the node to forget.
         address: String,
     },
     /// Add or modify authentication and authorization information for a remote client.
@@ -113,8 +113,15 @@ enum Commands {
         /// The volumes to limit pulling to.
         #[arg(long = "pull")]
         pull: Vec<String>,
-        /// The nodes to limit synchronization to.
-        nodes: Vec<String>,
+        /// The network addresses and optional ports of the nodes to limit synchronization to.
+        remote_nodes: Vec<String>,
+    },
+    /// Restore the local node to the latest remote backup.
+    Restore {
+        /// The network address and optional port of the node to restore from.
+        address: String,
+        /// The subvolumes to limit recovery to.
+        subvols: Vec<String>,
     },
 }
 
@@ -255,18 +262,34 @@ fn logic() -> Result<()> {
                 local_node.snapshot_now(subvol.clone(), incremental)?;
             }
         }
-        Commands::Synchronize { push, pull, nodes } => {
+        Commands::Synchronize {
+            push,
+            pull,
+            remote_nodes,
+        } => {
             let local_node = LocalNode::new()?;
 
-            for node in local_node
+            for remote_node in local_node
                 .config()
                 .remotes
                 .iter()
-                .filter(|item| nodes.is_empty() || nodes.contains(&item.address))
+                .filter(|item| remote_nodes.is_empty() || remote_nodes.contains(&item.address))
             {
-                println!("Synchronizing with {}...", node.address);
-                sync(&local_node, node, &push, &pull)?;
+                println!("Synchronizing with {}...", remote_node.address);
+                sync(&local_node, remote_node, &push, &pull)?;
             }
+        }
+        Commands::Restore { address, subvols } => {
+            let local_node = LocalNode::new()?;
+
+            let subvols = if !subvols.is_empty() {
+                &subvols
+            } else {
+                &local_node.config().subvols
+            };
+
+            println!("Restoring from {}...", address);
+            restore(&local_node, &address, subvols)?;
         }
     }
 
@@ -378,4 +401,8 @@ fn sync(
     stream_conn.data_sync(tx, rx_setup, rx_finish)?;
 
     Ok(())
+}
+
+fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<()> {
+    todo!()
 }
