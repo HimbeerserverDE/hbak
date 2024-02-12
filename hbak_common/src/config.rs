@@ -31,11 +31,8 @@ pub struct NodeConfig {
     /// **Remember this passphrase at all costs. Losing it makes it impossible
     /// to recover any of the backups.**
     pub passphrase: String,
-    /// The nodes to push (encrypted) owned or replicated volumes to.
-    pub push: Vec<RemoteNode>,
-    /// The nodes to pull (encrypted) replicas of their owned
-    /// or replicated volumes from.
-    pub pull: Vec<RemoteNode>,
+    /// The remote nodes to interact with by pushing to or pulling from them.
+    pub remotes: Vec<RemoteNode>,
     /// The authentication details and privileges of other nodes
     /// for verification when they connect.
     pub auth: Vec<RemoteNodeAuth>,
@@ -78,19 +75,15 @@ impl NodeConfig {
 
 /// A `RemoteNode` defines a network node that can be interacted with.
 /// Backups can be pushed to or pulled from a `RemoteNode`.
-///
-/// The meaning of the `vols` field differs based on the context
-/// the `RemoteNode` appears in:
-///
-/// * Push: The volumes to push to the remote node.
-/// * Pull: The volumes to pull from the remote node,
-///         must not include subvolumes owned by the local node.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RemoteNode {
     /// The network address and port of the node to push to.
     pub address: String,
-    /// The volumes to interact with, see above for details.
-    pub volumes: Vec<Volume>,
+    /// The volumes to push to the remote node.
+    pub push: Vec<Volume>,
+    /// The volumes to pull from the remote node,
+    /// must not include subvolumes owned by the local node.
+    pub pull: Vec<Volume>,
 }
 
 /// A `RemoteNodeAuth` defines authentication and authorization details

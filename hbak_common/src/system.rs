@@ -34,8 +34,7 @@ pub fn init(
         node_name,
         subvols: Vec::default(),
         passphrase,
-        push: Vec::default(),
-        pull: Vec::default(),
+        remotes: Vec::default(),
         auth: Vec::default(),
     };
 

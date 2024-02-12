@@ -47,28 +47,18 @@ enum Commands {
         /// The name of the subvolume to unmark as owned.
         subvol: String,
     },
-    /// Add or modify a remote to push volumes to.
-    AddPush {
-        /// The network address and port of the node to push to.
+    /// Add or modify a remote to push to or pull from.
+    AddRemote {
+        /// The network address and port of the remote node.
         address: String,
         /// The volumes to push to the remote node.
-        volumes: Vec<String>,
-    },
-    /// Remove a push remote without deleting anything.
-    RmPush {
-        /// The network address and port of the node to forget.
-        address: String,
-    },
-    /// Add or modify a remote to pull volumes from.
-    AddPull {
-        /// The network address and port of the node to pull from.
-        address: String,
+        push: Vec<String>,
         /// The volumes to pull from the remote node.
         /// Subvolumes owned by the local node are silently ignored.
-        volumes: Vec<String>,
+        pull: Vec<String>,
     },
-    /// Remove a pull remote without deleting anything.
-    RmPull {
+    /// Remove a remote without deleting anything.
+    RmRemote {
         /// The network address and port of the node to forget.
         address: String,
     },
@@ -153,43 +143,25 @@ fn logic() -> Result<()> {
             node_config.subvols.retain(|item| *item != subvol);
             node_config.save()?;
         }
-        Commands::AddPush { address, volumes } => {
-            let mut node_config = NodeConfig::load()?;
-
-            node_config.push.retain(|item| item.address != address);
-            node_config.push.push(RemoteNode {
-                address,
-                volumes: Volume::try_from_bulk(volumes)?,
-            });
-            node_config.save()?;
-        }
-        Commands::RmPush { address } => {
-            let mut node_config = NodeConfig::load()?;
-
-            node_config.push.retain(|item| item.address != address);
-            node_config.save()?;
-        }
-        Commands::AddPull {
+        Commands::AddRemote {
             address,
-            mut volumes,
+            push,
+            pull,
         } => {
-            let local_node = LocalNode::new()?;
-
-            volumes.retain(|subvol| !local_node.owns_subvol(subvol));
-
             let mut node_config = NodeConfig::load()?;
 
-            node_config.pull.retain(|item| item.address != address);
-            node_config.pull.push(RemoteNode {
+            node_config.remotes.retain(|item| item.address != address);
+            node_config.remotes.push(RemoteNode {
                 address,
-                volumes: Volume::try_from_bulk(volumes)?,
+                push: Volume::try_from_bulk(push)?,
+                pull: Volume::try_from_bulk(pull)?,
             });
             node_config.save()?;
         }
-        Commands::RmPull { address } => {
+        Commands::RmRemote { address } => {
             let mut node_config = NodeConfig::load()?;
 
-            node_config.pull.retain(|item| item.address != address);
+            node_config.remotes.retain(|item| item.address != address);
             node_config.save()?;
         }
         Commands::Grant {
