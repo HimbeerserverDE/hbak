@@ -19,7 +19,7 @@ use subtle::ConstantTimeEq;
 
 /// Default TCP server port. Not officially reserved.
 /// 406 is the sum of the ASCII codes for `hbak` and an offset to the 20000 port range.
-pub const DEFAULT_PORT: u16 = 20202;
+pub const DEFAULT_PORT: u16 = 20406;
 
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
