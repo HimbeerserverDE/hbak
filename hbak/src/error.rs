@@ -4,9 +4,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("An error has occured on the local node: {0}")]
+    #[error("An error occured on the local node: {0}")]
     HbakLocalNode(#[from] hbak_common::LocalNodeError),
-    #[error("A network error has occured: {0}")]
+    #[error("A network error occured: {0}")]
     HbakNetwork(#[from] hbak_common::NetworkError),
     #[error("Unable to parse volume identifier: {0}")]
     HbakVolumeParse(#[from] hbak_common::VolumeParseError),
