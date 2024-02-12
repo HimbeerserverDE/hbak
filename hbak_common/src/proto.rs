@@ -5,7 +5,7 @@ use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdout, Command, Stdio};
 use std::{fmt, fs};
@@ -359,12 +359,13 @@ impl LocalNode {
     }
 
     /// Returns a new [`crate::stream::SnapshotStream`]
-    /// wrapping the latest full snapshot of the specified subvolume.
-    pub fn export_full(
+    /// wrapping the provided [`Snapshot`].
+    /// It is an error to call this method on a foreign [`Snapshot`].
+    pub fn send_snapshot(
         &self,
-        subvol: String,
+        snapshot: &Snapshot,
     ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
-        let src = self.latest_snapshot_full(subvol)?.snapshot_path();
+        let src = snapshot.snapshot_path();
         let cmd = Command::new("btrfs")
             .arg("send")
             .arg("--compressed-data")
@@ -376,6 +377,27 @@ impl LocalNode {
             BufReader::new(cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
             &self.config().passphrase,
         )
+    }
+
+    /// Returns a new [`crate::stream::SnapshotStream`]
+    /// wrapping the latest full snapshot of the specified subvolume.
+    pub fn export_full(
+        &self,
+        subvol: String,
+    ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
+        self.send_snapshot(&self.latest_snapshot_full(subvol)?)
+    }
+
+    /// Returns a new [`Read`] wrapping the provided snapshot or backup.
+    /// Performs encryption if exporting a local [`Snapshot`].
+    pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn Read>, LocalNodeError> {
+        if self.owns_backup(snapshot) {
+            Ok(Box::new(self.send_snapshot(snapshot)?))
+        } else {
+            Ok(Box::new(BufReader::new(File::open(
+                snapshot.backup_path(),
+            )?)))
+        }
     }
 
     /// Writes the provided [`crate::stream::SnapshotStream`]
