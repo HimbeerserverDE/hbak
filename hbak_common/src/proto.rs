@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::{fmt, fs};
 
 use chrono::prelude::*;
@@ -597,28 +597,18 @@ impl LocalNode {
         })
     }
 
-    /// Returns a new [`crate::stream::RecoveryStream`]
-    /// wrapping the latest full backup of the specified subvolume.
-    pub fn import_full(
+    /// Returns a `btrfs receive` [`Child`] along with a new [`crate::stream::RecoveryStream`]
+    /// restoring the subvolume written to the stream.
+    ///
+    /// # Safety
+    ///
+    /// It is required to wait for the returned [`Child`] to complete
+    /// to ensure that all data is restored. Care needs to be taken
+    /// that the `RecoveryStream` is dropped beforehand to prevent a deadlock.
+    /// Furthermore the [`Child`] should be killed if any errors occur.
+    pub fn recover(
         &self,
-        subvol: String,
-    ) -> Result<RecoveryStream<BufReader<File>>, LocalNodeError> {
-        let volume = Volume::new_local(subvol)?;
-
-        let backup = self.latest_backup_full(volume)?;
-        if backup.snapshot_path().exists() {
-            return Err(LocalNodeError::SnapshotNotGone(backup));
-        }
-
-        let src = backup.backup_path();
-        let file = BufReader::new(File::open(src)?);
-
-        RecoveryStream::new(file, &self.config().passphrase)
-    }
-
-    /// Writes the provided [`crate::stream::RecoveryStream`]
-    /// to the correct local snapshot.
-    pub fn recover<B: BufRead>(&self, mut stream: RecoveryStream<B>) -> Result<(), LocalNodeError> {
+    ) -> Result<(Child, RecoveryStream<BufWriter<ChildStdin>, &str>), LocalNodeError> {
         let dst = SNAPSHOT_DIR;
         let mut cmd = Command::new("btrfs")
             .arg("receive")
@@ -626,20 +616,12 @@ impl LocalNode {
             .stdin(Stdio::piped())
             .spawn()?;
 
-        if let Err(e) = io::copy(
-            &mut stream,
-            cmd.stdin.as_mut().ok_or(LocalNodeError::NoBtrfsInput)?,
-        ) {
-            cmd.kill()?;
-            return Err(e.into());
-        }
-        cmd.stdin = None; // Make sure `btrfs receive` doesn't deadlock.
+        let child_stdin = cmd.stdin.take().ok_or(LocalNodeError::NoBtrfsInput)?;
 
-        if cmd.wait()?.success() {
-            Ok(())
-        } else {
-            Err(LocalNodeError::BtrfsCmd)
-        }
+        Ok((
+            cmd,
+            RecoveryStream::new(BufWriter::new(child_stdin), &self.config().passphrase),
+        ))
     }
 }
 

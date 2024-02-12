@@ -2,7 +2,7 @@ use crate::system;
 use crate::LocalNodeError;
 
 use std::collections::VecDeque;
-use std::io::{self, BufRead, Read};
+use std::io::{self, BufRead, Read, Write};
 
 use chacha20::XChaCha20;
 use chacha20poly1305::aead::generic_array::GenericArray;
@@ -102,8 +102,14 @@ impl<B: BufRead> Read for SnapshotStream<B> {
 
 /// A `RecoveryStream` is a wrapper around an encrypted btrfs snapshot
 /// that maps the stream to a decrypted version without the nonce.
-pub struct RecoveryStream<B: BufRead> {
-    inner: B,
+///
+/// Dropping a `RecoveryStream` flushes the last chunk to the underlying [`Write`]
+/// ignoring any errors. You should handle errors where applicable
+/// by calling [`RecoveryStream::close`] manually before dropping the stream.
+pub struct RecoveryStream<W: Write, P: AsRef<[u8]>> {
+    inner: W,
+    passphrase: P,
+    closed: bool,
     // The purpose of the `Option` is to allow `cipher` to be moved
     // when calling `encrypt_last` on it with just a mutable reference
     // to the `RecoveryStream` (so that `RecoveryStream::read_data`
@@ -112,67 +118,94 @@ pub struct RecoveryStream<B: BufRead> {
     buf: VecDeque<u8>,
 }
 
-impl<B: BufRead> RecoveryStream<B> {
-    pub(crate) fn new<P: AsRef<[u8]>>(mut inner: B, passphrase: P) -> Result<Self, LocalNodeError> {
-        let mut nonce_buf = [0; 19];
-        inner.read_exact(&mut nonce_buf)?;
-
-        let nonce = GenericArray::from_slice(&nonce_buf);
-        let mut key_array = [0; 32];
-        system::hash_argon2id(&mut key_array, nonce, passphrase)?;
-        let key = Key::from_slice(&key_array);
-        let cipher = DecryptorBE32::new(key, nonce);
-
-        Ok(Self {
+impl<W: Write, P: AsRef<[u8]>> RecoveryStream<W, P> {
+    pub(crate) fn new(inner: W, passphrase: P) -> Self {
+        Self {
             inner,
-            cipher: Some(cipher),
+            passphrase,
+            closed: false,
+            cipher: None,
             buf: VecDeque::new(),
-        })
+        }
+    }
+
+    /// Reports whether the `RecoveryStream` is closed.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    /// Closes the `RecoveryStream`, writing all pending data to the underlying [`Write`].
+    /// Fails with a 'broken pipe' error if the `RecoveryStream` is already closed.
+    ///
+    /// Further writes will return 'broken pipe' errors.
+    ///
+    /// This method is automatically called without error handling
+    /// when the `RecoveryStream` is dropped.
+    pub fn close(&mut self) -> Result<(), LocalNodeError> {
+        if self.is_closed() {
+            return Err(io::Error::from(io::ErrorKind::BrokenPipe).into());
+        }
+
+        self.closed = true;
+
+        self.buf.make_contiguous();
+
+        let mut chunk = [0; CHUNKSIZE];
+        let n = self.buf.read(&mut chunk)?;
+        let chunk = &chunk[..n];
+
+        if let Some(cipher) = self.cipher.take() {
+            let plain = cipher.decrypt_last(chunk)?;
+            self.inner.write_all(&plain)?;
+        }
+
+        // Uninitialized cipher is okay, nothing needs to be written.
+        Ok(())
     }
 }
 
-impl<B: BufRead> Read for RecoveryStream<B> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut n = 0;
-
-        // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-        while self.inner.fill_buf().map(|b| !b.is_empty())? {
-            let mut chunk = [0; CHUNKSIZE];
-            let n = self.inner.read(&mut chunk)?;
-            let chunk = &chunk[..n];
-
-            // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-            if self.inner.fill_buf().map(|b| !b.is_empty())? {
-                self.buf.extend(
-                    self.cipher
-                        .as_mut()
-                        .unwrap()
-                        .decrypt_next(chunk)
-                        .map_err(io::Error::other)?
-                        .into_iter(),
-                );
-            } else {
-                self.buf.extend(
-                    self.cipher
-                        .take()
-                        .unwrap()
-                        .decrypt_last(chunk)
-                        .map_err(io::Error::other)?
-                        .into_iter(),
-                );
-                break;
-            }
+impl<W: Write, P: AsRef<[u8]>> Write for RecoveryStream<W, P> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.is_closed() {
+            return Err(io::Error::from(io::ErrorKind::BrokenPipe));
         }
 
-        while let Some(byte) = self.buf.pop_front() {
-            if n >= buf.len() {
-                break;
+        for byte in buf {
+            if let Some(cipher) = &mut self.cipher {
+                if self.buf.len() >= CHUNKSIZE {
+                    let mut chunk = [0; CHUNKSIZE];
+                    self.buf.read_exact(&mut chunk)?;
+
+                    let plain = cipher
+                        .decrypt_next(chunk.as_slice())
+                        .map_err(io::Error::other)?;
+                    self.inner.write_all(&plain)?;
+                }
+            } else if self.buf.len() >= 19 {
+                let mut nonce_buf = [0; 19];
+                self.buf.read_exact(&mut nonce_buf)?;
+
+                let nonce = GenericArray::from_slice(&nonce_buf);
+                let mut key_array = [0; 32];
+                system::hash_argon2id(&mut key_array, nonce, &self.passphrase)
+                    .map_err(io::Error::other)?;
+                let key = Key::from_slice(&key_array);
+                self.cipher = Some(DecryptorBE32::new(key, nonce));
             }
 
-            buf[n] = byte;
-            n += 1;
+            self.buf.push_back(*byte);
         }
 
-        Ok(n)
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<W: Write, P: AsRef<[u8]>> Drop for RecoveryStream<W, P> {
+    fn drop(&mut self) {
+        self.close().ok();
     }
 }
