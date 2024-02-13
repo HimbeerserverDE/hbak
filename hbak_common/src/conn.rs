@@ -138,8 +138,8 @@ impl TryFrom<TcpStream> for AuthConn {
     fn try_from(stream: TcpStream) -> io::Result<Self> {
         let socket = Socket::from(stream);
 
-        socket.set_send_buffer_size(2 * CHUNKSIZE)?;
-        socket.set_recv_buffer_size(2 * CHUNKSIZE)?;
+        socket.set_send_buffer_size(10 * CHUNKSIZE)?;
+        socket.set_recv_buffer_size(10 * CHUNKSIZE)?;
 
         Ok(Self {
             stream: socket.into(),
@@ -245,8 +245,8 @@ impl TryFrom<TcpStream> for AuthServ {
     fn try_from(stream: TcpStream) -> io::Result<Self> {
         let socket = Socket::from(stream);
 
-        socket.set_send_buffer_size(2 * CHUNKSIZE)?;
-        socket.set_recv_buffer_size(2 * CHUNKSIZE)?;
+        socket.set_send_buffer_size(10 * CHUNKSIZE)?;
+        socket.set_recv_buffer_size(10 * CHUNKSIZE)?;
 
         Ok(Self {
             stream: socket.into(),
