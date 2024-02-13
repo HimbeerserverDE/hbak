@@ -60,9 +60,8 @@ impl<B: BufRead> Read for SnapshotStream<B> {
 
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
-            let mut chunk = [0; CHUNKSIZE];
-            let n = self.inner.read(&mut chunk)?;
-            let chunk = &chunk[..n];
+            let mut chunk = Vec::with_capacity(CHUNKSIZE);
+            let _ = self.inner.read(&mut chunk)?;
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
             if self.inner.fill_buf().map(|b| !b.is_empty())? {
@@ -70,7 +69,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                     self.cipher
                         .as_mut()
                         .unwrap()
-                        .encrypt_next(chunk)
+                        .encrypt_next(chunk.as_slice())
                         .map_err(io::Error::other)?
                         .into_iter(),
                 );
@@ -79,7 +78,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                     self.cipher
                         .take()
                         .unwrap()
-                        .encrypt_last(chunk)
+                        .encrypt_last(chunk.as_slice())
                         .map_err(io::Error::other)?
                         .into_iter(),
                 );
@@ -150,12 +149,11 @@ impl<W: Write, P: AsRef<[u8]>> RecoveryStream<W, P> {
 
         self.buf.make_contiguous();
 
-        let mut chunk = [0; CHUNKSIZE];
-        let n = self.buf.read(&mut chunk)?;
-        let chunk = &chunk[..n];
+        let mut chunk = Vec::with_capacity(CHUNKSIZE);
+        let _ = self.buf.read(&mut chunk)?;
 
         if let Some(cipher) = self.cipher.take() {
-            let plain = cipher.decrypt_last(chunk)?;
+            let plain = cipher.decrypt_last(chunk.as_slice())?;
             self.inner.write_all(&plain)?;
         }
 
@@ -173,7 +171,7 @@ impl<W: Write, P: AsRef<[u8]>> Write for RecoveryStream<W, P> {
         for byte in buf {
             if let Some(cipher) = &mut self.cipher {
                 if self.buf.len() >= CHUNKSIZE {
-                    let mut chunk = [0; CHUNKSIZE];
+                    let mut chunk = vec![0; CHUNKSIZE];
                     self.buf.read_exact(&mut chunk)?;
 
                     let plain = cipher

@@ -410,31 +410,29 @@ impl StreamConn<Active> {
             Ok(false)
         };
 
-        let send_chunk =
-            |stream_conn: &Self, snapshot_stream: &mut R| -> Result<bool, NetworkError> {
-                let mut chunk = [0; CHUNKSIZE];
-                let n = snapshot_stream.read(&mut chunk)?;
-                let chunk = &chunk[..n];
+        let send_chunk = |stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
+            let mut chunk = Vec::with_capacity(CHUNKSIZE);
+            let n = r.read(&mut chunk)?;
 
-                if n > 0 {
-                    stream_conn.send_message(&StreamMessage::Chunk(chunk.to_vec()))?;
-                    Ok(true)
-                } else {
-                    stream_conn.send_message(&StreamMessage::End(Ok(())))?;
-                    Ok(false)
-                }
-            };
+            if n > 0 {
+                stream_conn.send_message(&StreamMessage::Chunk(chunk))?;
+                Ok(true)
+            } else {
+                stream_conn.send_message(&StreamMessage::End(Ok(())))?;
+                Ok(false)
+            }
+        };
 
         let local_done = Mutex::new(false);
         thread::scope(|s| {
             let tx = s.spawn(|| -> Result<(), NetworkError> {
-                for (mut snapshot_stream, snapshot) in tx.into_iter() {
+                for (mut r, snapshot) in tx.into_iter() {
                     stream_conn
                         .read()
                         .unwrap()
                         .send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
-                    while match send_chunk(&stream_conn.read().unwrap(), &mut snapshot_stream) {
+                    while match send_chunk(&stream_conn.read().unwrap(), &mut r) {
                         Ok(is_data_left) => is_data_left,
                         Err(e) => {
                             stream_conn
