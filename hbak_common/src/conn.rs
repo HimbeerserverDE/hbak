@@ -133,6 +133,7 @@ impl AuthConn {
 
 impl From<TcpStream> for AuthConn {
     fn from(stream: TcpStream) -> Self {
+        stream.set_nodelay(true).unwrap();
         Self { stream }
     }
 }
@@ -231,6 +232,7 @@ impl AuthServ {
 
 impl From<TcpStream> for AuthServ {
     fn from(stream: TcpStream) -> Self {
+        stream.set_nodelay(true).unwrap();
         Self { stream }
     }
 }
