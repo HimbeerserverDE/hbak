@@ -71,7 +71,7 @@ fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
 
     let local_node = LocalNode::new()?;
 
-    let auth_serv = AuthServ::from(stream);
+    let auth_serv = AuthServ::try_from(stream)?;
     let (stream_conn, remote_node_auth) =
         auth_serv.secure_stream(local_node.config().auth.clone())?;
 
