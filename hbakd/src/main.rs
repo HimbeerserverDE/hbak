@@ -1,13 +1,13 @@
-use hbak_common::config::NodeConfig;
 use hbak_common::conn::{AuthServ, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
-use hbak_common::proto::{LocalNode, Node, Snapshot};
+use hbak_common::proto::{LocalNode, Mode, Node, Snapshot};
 use hbak_common::{LocalNodeError, NetworkError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::Arc;
 use std::thread;
 
 use clap::Parser;
@@ -43,8 +43,9 @@ fn main() {
 }
 
 fn serve() -> Result<(), LocalNodeError> {
-    let node_config = NodeConfig::load()?;
-    let bind_addr = node_config.bind_addr.unwrap_or(SocketAddr::new(
+    let local_node = Arc::new(LocalNode::new(Mode::Server)?);
+
+    let bind_addr = local_node.config().bind_addr.unwrap_or(SocketAddr::new(
         IpAddr::V6(Ipv6Addr::UNSPECIFIED),
         DEFAULT_PORT,
     ));
@@ -57,7 +58,8 @@ fn serve() -> Result<(), LocalNodeError> {
         let stream = stream?;
         let peer_addr = stream.peer_addr()?;
 
-        thread::spawn(move || match handle_client(stream) {
+        let local_node = Arc::clone(&local_node);
+        thread::spawn(move || match handle_client(&local_node, stream) {
             Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
             Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
         });
@@ -66,10 +68,8 @@ fn serve() -> Result<(), LocalNodeError> {
     unreachable!()
 }
 
-fn handle_client(stream: TcpStream) -> Result<(), NetworkError> {
+fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<(), NetworkError> {
     let peer_addr = stream.peer_addr()?;
-
-    let local_node = LocalNode::new()?;
 
     let auth_serv = AuthServ::from(stream);
     let (stream_conn, remote_node_auth) =

@@ -4,7 +4,7 @@ use error::*;
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::conn::{AuthConn, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
-use hbak_common::proto::{LatestSnapshots, LocalNode, Node, Snapshot, Volume};
+use hbak_common::proto::{LatestSnapshots, LocalNode, Mode, Node, Snapshot, Volume};
 use hbak_common::system;
 use hbak_common::{LocalNodeError, RemoteError};
 
@@ -186,7 +186,7 @@ fn logic() -> Result<()> {
         } => {
             // Unmount the btrfs before potentially getting killed at prompts.
             {
-                let local_node = LocalNode::new()?;
+                let local_node = LocalNode::new(Mode::Client)?;
 
                 push.retain(|subvol| !local_node.owns_subvol(subvol));
             }
@@ -214,7 +214,7 @@ fn logic() -> Result<()> {
             mut push,
             pull,
         } => {
-            let local_node = LocalNode::new()?;
+            let local_node = LocalNode::new(Mode::Client)?;
 
             push.retain(|subvol| !local_node.owns_subvol(subvol));
 
@@ -248,7 +248,7 @@ fn logic() -> Result<()> {
             incremental,
             subvols,
         } => {
-            let local_node = LocalNode::new()?;
+            let local_node = LocalNode::new(Mode::Client)?;
 
             let subvols = if subvols.is_empty() {
                 &local_node.config().subvols
@@ -271,7 +271,7 @@ fn logic() -> Result<()> {
             pull,
             remote_nodes,
         } => {
-            let local_node = LocalNode::new()?;
+            let local_node = LocalNode::new(Mode::Client)?;
 
             for remote_node in local_node
                 .config()
@@ -284,7 +284,7 @@ fn logic() -> Result<()> {
             }
         }
         Commands::Restore { address, subvols } => {
-            let local_node = LocalNode::new()?;
+            let local_node = LocalNode::new(Mode::Client)?;
 
             let subvols = if !subvols.is_empty() {
                 &subvols
@@ -428,7 +428,7 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
 
     for subvol in subvols {
         local_sync_info.volumes.insert(
-            Volume::new_local(subvol.to_string())?,
+            Volume::new_local(Mode::Client, subvol.to_string())?,
             LatestSnapshots::none(),
         );
     }

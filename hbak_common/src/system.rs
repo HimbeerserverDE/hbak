@@ -14,7 +14,8 @@ use rand::Rng;
 use sha2::Sha256;
 use sys_mount::{Mount, UnmountFlags};
 
-pub const MOUNTPOINT: &str = "/mnt/hbak";
+pub const MOUNTPOINTC: &str = "/mnt/hbak";
+pub const MOUNTPOINTS: &str = "/mnt/hbakd";
 
 /// Initializes the configuration file and local btrfs subvolumes.
 pub fn init(
@@ -48,11 +49,12 @@ pub fn init(
 }
 
 fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
-    fs::create_dir_all(MOUNTPOINT)?;
+    fs::create_dir_all(MOUNTPOINTC)?;
+    fs::create_dir_all(MOUNTPOINTS)?;
 
     let _btrfs = Mount::builder().data("compress=zstd").mount_autodrop(
         device,
-        MOUNTPOINT,
+        MOUNTPOINTC,
         UnmountFlags::DETACH,
     )?;
 
@@ -97,13 +99,14 @@ pub fn deinit(remove_backups: bool) -> Result<(), LocalNodeError> {
 }
 
 fn deinit_btrfs() -> Result<(), LocalNodeError> {
-    fs::create_dir_all(MOUNTPOINT)?;
+    fs::create_dir_all(MOUNTPOINTC)?;
+    fs::create_dir_all(MOUNTPOINTS)?;
 
     let node_config = NodeConfig::load()?;
 
     let _btrfs = Mount::builder().data("compress=zstd").mount_autodrop(
         node_config.device,
-        MOUNTPOINT,
+        MOUNTPOINTC,
         UnmountFlags::DETACH,
     )?;
 
@@ -129,7 +132,7 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
     }
 
     let subvols = output.stdout.lines().map(|line| match line {
-        Ok(line) => Ok(Path::new(MOUNTPOINT).join(
+        Ok(line) => Ok(Path::new(MOUNTPOINTC).join(
             line.split_whitespace()
                 .next_back()
                 .expect("String splitting yields at least one item"),

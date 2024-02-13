@@ -1,6 +1,6 @@
 use crate::config::NodeConfig;
 use crate::stream::{RecoveryStream, SnapshotStream, CHUNKSIZE};
-use crate::system::MOUNTPOINT;
+use crate::system::{MOUNTPOINTC, MOUNTPOINTS};
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
 use std::ffi::OsStr;
@@ -180,8 +180,8 @@ pub struct Volume {
 impl Volume {
     /// Constructs a new `Volume` using the local node name
     /// and the specified subvolume name.
-    pub fn new_local(subvol: String) -> Result<Self, LocalNodeError> {
-        let node = LocalNode::new()?;
+    pub fn new_local(mode: Mode, subvol: String) -> Result<Self, LocalNodeError> {
+        let node = LocalNode::new(mode)?;
 
         if node.owns_subvol(&subvol) {
             return Err(LocalNodeError::NoSuchSubvolume(subvol.clone()));
@@ -266,25 +266,49 @@ impl From<String> for AnyNode {
     }
 }
 
+/// A `Mode` specifies whether the [`LocalNode`] is acting as a network client or server.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Mode {
+    /// The [`LocalNode`] is acting as a network client (hbak binary).
+    Client,
+    /// The [`LocalNode`] is acting as a network server (hbakd binary).
+    Server,
+}
+
+impl Mode {
+    /// Returns the correct mountpoint for the `Mode`.
+    pub fn mountpoint(&self) -> &'static str {
+        match self {
+            Self::Client => MOUNTPOINTC,
+            Self::Server => MOUNTPOINTS,
+        }
+    }
+}
+
 /// A `LocalNode` represents the current machine.
 pub struct LocalNode {
     config: NodeConfig,
+    mountpoint: &'static str,
     _btrfs: UnmountDrop<Mount>,
 }
 
 impl LocalNode {
     /// Returns a new `LocalNode` representing the local machine.
-    pub fn new() -> Result<Self, LocalNodeError> {
+    pub fn new(mode: Mode) -> Result<Self, LocalNodeError> {
         let config = NodeConfig::load()?;
         let device = config.device.clone();
 
-        fs::create_dir_all(MOUNTPOINT)?;
+        fs::create_dir_all(MOUNTPOINTC)?;
+        fs::create_dir_all(MOUNTPOINTS)?;
+
+        let mountpoint = mode.mountpoint();
 
         Ok(Self {
             config,
+            mountpoint,
             _btrfs: Mount::builder().data("compress=zstd").mount_autodrop(
                 device,
-                MOUNTPOINT,
+                mountpoint,
                 UnmountFlags::DETACH,
             )?,
         })
@@ -316,7 +340,7 @@ impl LocalNode {
             return Err(LocalNodeError::ForeignSubvolume(subvol));
         }
 
-        let src = Path::new(MOUNTPOINT).join(&subvol);
+        let src = Path::new(self.mountpoint).join(&subvol);
         let snapshot = Snapshot {
             node_name: self.name().to_string(),
             subvol,
