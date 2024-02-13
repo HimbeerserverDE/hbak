@@ -254,15 +254,21 @@ impl<P: Phase> StreamConn<P> {
     }
 
     fn send_message(&self, message: &StreamMessage) -> Result<(), NetworkError> {
+        println!("[dbg] StreamConn::send_message({:?})", message);
+
         let plaintext = bincode::serialize(message)?;
+        println!("[dbg] ser");
         let ciphertext = self
             .encryptor
             .write()
             .unwrap()
             .encrypt_next(plaintext.as_slice())?;
+        println!("[dbg] encrypt");
 
         let buf = bincode::serialize(&RawMessage(ciphertext))?;
+        println!("[dbg] ser2: {}", buf.len());
         (&self.stream).write_all(&buf)?;
+        println!("[dbg] write");
 
         Ok(())
     }
