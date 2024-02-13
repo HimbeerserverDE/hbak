@@ -11,8 +11,8 @@ use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::consts::U19;
 use chacha20poly1305::{AeadCore, ChaChaPoly1305, Key, XChaCha20Poly1305};
 
-/// The size of data chunks to encrypt or decrypt at a time in bytes.
-pub const CHUNKSIZE: usize = 8 * 1024;
+/// The size of data chunks to encrypt or decrypt at a time in bytes (512 MiB).
+pub const CHUNKSIZE: usize = 512 * 1024 * 1024;
 
 /// A `SnapshotStream` is a wrapper around a btrfs stream
 /// that maps the stream to an encrypted version
