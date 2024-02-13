@@ -382,11 +382,12 @@ fn sync(
                 return Err(RemoteError::AccessDenied);
             }
 
-            if snapshot.backup_path().exists() {
+            if snapshot.backup_path(Mode::Client).exists() {
                 return Err(RemoteError::Immutable);
             }
 
-            let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
+            let file = File::create(snapshot.streaming_path(Mode::Client))
+                .map_err(|_| RemoteError::RxError)?;
 
             println!("Receiving {} from {}", snapshot, remote_node.address);
 
@@ -394,8 +395,11 @@ fn sync(
         };
 
     let rx_finish = |snapshot: Snapshot| {
-        fs::rename(snapshot.streaming_path(), snapshot.backup_path())
-            .map_err(|_| RemoteError::RxError)?;
+        fs::rename(
+            snapshot.streaming_path(Mode::Client),
+            snapshot.backup_path(Mode::Client),
+        )
+        .map_err(|_| RemoteError::RxError)?;
 
         println!("Received {} from {}", snapshot, remote_node.address);
 
@@ -445,7 +449,7 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
             return Err(RemoteError::AccessDenied);
         }
 
-        if snapshot.snapshot_path().exists() {
+        if snapshot.snapshot_path(Mode::Client).exists() {
             return Err(RemoteError::Immutable);
         }
 

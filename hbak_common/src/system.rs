@@ -1,5 +1,5 @@
 use crate::config::NodeConfig;
-use crate::proto::{BACKUP_DIR, SNAPSHOT_DIR};
+use crate::proto::{BACKUP_DIR_C, SNAPSHOT_DIR_C};
 use crate::LocalNodeError;
 
 use std::fs;
@@ -61,7 +61,7 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
     if !Command::new("btrfs")
         .arg("subvolume")
         .arg("create")
-        .arg(SNAPSHOT_DIR)
+        .arg(SNAPSHOT_DIR_C)
         .spawn()?
         .wait()?
         .success()
@@ -72,7 +72,7 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
     if !Command::new("btrfs")
         .arg("subvolume")
         .arg("create")
-        .arg(BACKUP_DIR)
+        .arg(BACKUP_DIR_C)
         .spawn()?
         .wait()?
         .success()
@@ -113,7 +113,7 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
     if !Command::new("btrfs")
         .arg("subvolume")
         .arg("delete")
-        .arg(BACKUP_DIR)
+        .arg(BACKUP_DIR_C)
         .spawn()?
         .wait()?
         .success()
@@ -125,7 +125,7 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
         .arg("subvolume")
         .arg("list")
         .arg("-o")
-        .arg(SNAPSHOT_DIR)
+        .arg(SNAPSHOT_DIR_C)
         .output()?;
     if !output.status.success() {
         return Err(LocalNodeError::BtrfsCmd);
@@ -156,7 +156,7 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
     if !Command::new("btrfs")
         .arg("subvolume")
         .arg("delete")
-        .arg(SNAPSHOT_DIR)
+        .arg(SNAPSHOT_DIR_C)
         .spawn()?
         .wait()?
         .success()

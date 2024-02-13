@@ -14,8 +14,10 @@ use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use sys_mount::{Mount, UnmountDrop, UnmountFlags};
 
-pub const SNAPSHOT_DIR: &str = "/mnt/hbak/snapshots";
-pub const BACKUP_DIR: &str = "/mnt/hbak/backups";
+pub const SNAPSHOT_DIR_C: &str = "/mnt/hbak/snapshots";
+pub const SNAPSHOT_DIR_S: &str = "/mnt/hbakd/snapshots";
+pub const BACKUP_DIR_C: &str = "/mnt/hbak/backups";
+pub const BACKUP_DIR_S: &str = "/mnt/hbakd/backups";
 
 /// A `Snapshot` uniquely identifies a full or incremental btrfs snapshot
 /// of a node via the node name, subvolume name and creation date.
@@ -53,10 +55,10 @@ impl Snapshot {
     /// Converts the `Snapshot` to its local storage location,
     /// i.e. a member of the `/mnt/hbak/snapshots` directory
     /// of its node's own snapshots.
-    pub fn snapshot_path(&self) -> PathBuf {
+    pub fn snapshot_path(&self, mode: Mode) -> PathBuf {
         let mut path_buf = PathBuf::new();
 
-        path_buf.push(SNAPSHOT_DIR);
+        path_buf.push(mode.snapshot_dir());
         path_buf.push(self.to_string());
 
         path_buf
@@ -65,10 +67,10 @@ impl Snapshot {
     /// Converts the `Snapshot` to its remote storage location,
     /// i.e. a member of the `/mnt/hbak/backups` directory
     /// where other nodes may store it.
-    pub fn backup_path(&self) -> PathBuf {
+    pub fn backup_path(&self, mode: Mode) -> PathBuf {
         let mut path_buf = PathBuf::new();
 
-        path_buf.push(BACKUP_DIR);
+        path_buf.push(mode.backup_dir());
         path_buf.push(self.to_string());
 
         path_buf
@@ -83,10 +85,10 @@ impl Snapshot {
     /// This behavior allows partial or failed transmissions to be retried
     /// and is used to prevent (malicious) overwriting of existing snapshots
     /// that have fully been written.
-    pub fn streaming_path(&self) -> PathBuf {
+    pub fn streaming_path(&self, mode: Mode) -> PathBuf {
         let mut path_buf = PathBuf::new();
 
-        path_buf.push(BACKUP_DIR);
+        path_buf.push(mode.backup_dir());
         path_buf.push(format!("{self}.part"));
 
         path_buf
@@ -283,12 +285,28 @@ impl Mode {
             Self::Server => MOUNTPOINTS,
         }
     }
+
+    /// Returns the correct snapshot directory for the `Mode`.
+    pub fn snapshot_dir(&self) -> &'static str {
+        match self {
+            Self::Client => SNAPSHOT_DIR_C,
+            Self::Server => SNAPSHOT_DIR_S,
+        }
+    }
+
+    /// Returns the correct backup directory for the `Mode`.
+    pub fn backup_dir(&self) -> &'static str {
+        match self {
+            Self::Client => SNAPSHOT_DIR_C,
+            Self::Server => SNAPSHOT_DIR_S,
+        }
+    }
 }
 
 /// A `LocalNode` represents the current machine.
 pub struct LocalNode {
     config: NodeConfig,
-    mountpoint: &'static str,
+    mode: Mode,
     _btrfs: UnmountDrop<Mount>,
 }
 
@@ -305,7 +323,7 @@ impl LocalNode {
 
         Ok(Self {
             config,
-            mountpoint,
+            mode,
             _btrfs: Mount::builder().data("compress=zstd").mount_autodrop(
                 device,
                 mountpoint,
@@ -317,6 +335,11 @@ impl LocalNode {
     /// Returns a reference to the configuration of the `LocalNode`.
     pub fn config(&self) -> &NodeConfig {
         &self.config
+    }
+
+    /// Returns the [`Mode`] (network client or server) of the `LocalNode`.
+    pub fn mode(&self) -> Mode {
+        self.mode
     }
 
     /// Reports whether the `LocalNode` is the origin of the specified subvolume.
@@ -340,14 +363,14 @@ impl LocalNode {
             return Err(LocalNodeError::ForeignSubvolume(subvol));
         }
 
-        let src = Path::new(self.mountpoint).join(&subvol);
+        let src = Path::new(self.mode.mountpoint()).join(&subvol);
         let snapshot = Snapshot {
             node_name: self.name().to_string(),
             subvol,
             is_incremental,
             taken: Utc::now().naive_utc(),
         };
-        let dst = snapshot.snapshot_path();
+        let dst = snapshot.snapshot_path(self.mode);
 
         if dst.exists() {
             return Err(LocalNodeError::SnapshotExists(snapshot));
@@ -375,7 +398,7 @@ impl LocalNode {
             return Err(LocalNodeError::ForeignSubvolume(subvol));
         }
 
-        let snapshots = fs::read_dir(SNAPSHOT_DIR)?;
+        let snapshots = fs::read_dir(self.mode.snapshot_dir())?;
         let mut all_snapshots = Vec::new();
         for snapshot in snapshots {
             all_snapshots.push(Snapshot::try_from(&*snapshot?.path())?);
@@ -437,7 +460,7 @@ impl LocalNode {
         &self,
         snapshot: &Snapshot,
     ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
-        let src = snapshot.snapshot_path();
+        let src = snapshot.snapshot_path(self.mode);
         let cmd = Command::new("btrfs")
             .arg("send")
             .arg("--compressed-data")
@@ -468,7 +491,7 @@ impl LocalNode {
         } else {
             Ok(Box::new(BufReader::with_capacity(
                 CHUNKSIZE,
-                File::open(snapshot.backup_path())?,
+                File::open(snapshot.backup_path(self.mode))?,
             )))
         }
     }
@@ -480,7 +503,7 @@ impl LocalNode {
         mut stream: SnapshotStream<B>,
         snapshot: &Snapshot,
     ) -> Result<(), LocalNodeError> {
-        let dst = snapshot.backup_path();
+        let dst = snapshot.backup_path(self.mode);
         let mut file = BufWriter::with_capacity(CHUNKSIZE, File::create(dst)?);
 
         io::copy(&mut stream, &mut file)?;
@@ -492,7 +515,7 @@ impl LocalNode {
     pub fn all_backups(&self, volume: Option<&Volume>) -> Result<Vec<Snapshot>, LocalNodeError> {
         let mut all_backups = Vec::new();
 
-        let backups = fs::read_dir(BACKUP_DIR)?;
+        let backups = fs::read_dir(self.mode.backup_dir())?;
         for backup in backups {
             let backup = backup?;
 
@@ -636,7 +659,7 @@ impl LocalNode {
     pub fn recover(
         &self,
     ) -> Result<(Child, RecoveryStream<BufWriter<ChildStdin>, &str>), LocalNodeError> {
-        let dst = SNAPSHOT_DIR;
+        let dst = self.mode.snapshot_dir();
         let mut cmd = Command::new("btrfs")
             .arg("receive")
             .arg(dst)

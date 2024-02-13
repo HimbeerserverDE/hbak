@@ -141,11 +141,12 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<(), Networ
                 return Err(RemoteError::AccessDenied);
             }
 
-            if snapshot.backup_path().exists() {
+            if snapshot.backup_path(Mode::Server).exists() {
                 return Err(RemoteError::Immutable);
             }
 
-            let file = File::create(snapshot.streaming_path()).map_err(|_| RemoteError::RxError)?;
+            let file = File::create(snapshot.streaming_path(Mode::Server))
+                .map_err(|_| RemoteError::RxError)?;
 
             println!(
                 "[info] <{}@{}> Receiving {}",
@@ -156,8 +157,11 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<(), Networ
         };
 
     let rx_finish = |snapshot: Snapshot| {
-        fs::rename(snapshot.streaming_path(), snapshot.backup_path())
-            .map_err(|_| RemoteError::RxError)?;
+        fs::rename(
+            snapshot.streaming_path(Mode::Server),
+            snapshot.backup_path(Mode::Server),
+        )
+        .map_err(|_| RemoteError::RxError)?;
 
         println!(
             "[info] <{}@{}> Received {}",
