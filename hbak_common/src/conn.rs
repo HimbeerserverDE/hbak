@@ -243,8 +243,8 @@ impl From<TcpStream> for AuthServ {
 pub struct StreamConn<P: Phase> {
     stream_read: Mutex<BufReader<TcpStream>>,
     stream_write: Mutex<BufWriter<TcpStream>>,
-    encryptor: RwLock<EncryptorBE32<XChaCha20Poly1305>>,
-    decryptor: RwLock<DecryptorBE32<XChaCha20Poly1305>>,
+    encryptor: Mutex<EncryptorBE32<XChaCha20Poly1305>>,
+    decryptor: Mutex<DecryptorBE32<XChaCha20Poly1305>>,
     remote_node_name: String,
     _phase: PhantomData<P>,
 }
@@ -259,7 +259,7 @@ impl<P: Phase> StreamConn<P> {
         let plaintext = bincode::serialize(message)?;
         let ciphertext = self
             .encryptor
-            .write()
+            .lock()
             .unwrap()
             .encrypt_next(plaintext.as_slice())?;
 
@@ -275,7 +275,7 @@ impl<P: Phase> StreamConn<P> {
             bincode::deserialize_from(self.stream_read.lock().unwrap().deref_mut())?;
         let plaintext = self
             .decryptor
-            .write()
+            .lock()
             .unwrap()
             .decrypt_next(ciphertext.0.as_slice())?;
 
@@ -298,8 +298,8 @@ impl StreamConn<Idle> {
         Ok(Self {
             stream_read: Mutex::new(BufReader::with_capacity(2 * CHUNKSIZE, stream.try_clone()?)),
             stream_write: Mutex::new(BufWriter::with_capacity(2 * CHUNKSIZE, stream)),
-            encryptor: RwLock::new(EncryptorBE32::new(key, nonce)),
-            decryptor: RwLock::new(DecryptorBE32::new(key, nonce)),
+            encryptor: Mutex::new(EncryptorBE32::new(key, nonce)),
+            decryptor: Mutex::new(DecryptorBE32::new(key, nonce)),
             remote_node_name,
             _phase: PhantomData,
         })
