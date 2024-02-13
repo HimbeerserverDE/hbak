@@ -410,19 +410,21 @@ impl StreamConn<Active> {
             Ok(false)
         };
 
-        let send_chunk = |stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
-            let mut chunk = vec![0; CHUNKSIZE];
-            let n = r.read(&mut chunk)?;
-            chunk.truncate(n);
+        let send_chunk =
+            |m: &mut usize, stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
+                let mut chunk = vec![0; CHUNKSIZE];
+                let n = r.read(&mut chunk)?;
+                chunk.truncate(n);
+                *m += n;
 
-            if !chunk.is_empty() {
-                stream_conn.send_message(&StreamMessage::Chunk(chunk))?;
-                Ok(true)
-            } else {
-                stream_conn.send_message(&StreamMessage::End(Ok(())))?;
-                Ok(false)
-            }
-        };
+                if !chunk.is_empty() {
+                    // stream_conn.send_message(&StreamMessage::Chunk(chunk))?;
+                    Ok(true)
+                } else {
+                    stream_conn.send_message(&StreamMessage::End(Ok(())))?;
+                    Ok(false)
+                }
+            };
 
         let local_done = Mutex::new(false);
         thread::scope(|s| {
@@ -433,7 +435,8 @@ impl StreamConn<Active> {
                         .unwrap()
                         .send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
-                    while match send_chunk(&stream_conn.read().unwrap(), &mut r) {
+                    let mut m = 0;
+                    while match send_chunk(&mut m, &stream_conn.read().unwrap(), &mut r) {
                         Ok(is_data_left) => is_data_left,
                         Err(e) => {
                             stream_conn
@@ -442,7 +445,9 @@ impl StreamConn<Active> {
                                 .send_message(&StreamMessage::End(Err(RemoteError::TxError)))?;
                             return Err(e);
                         }
-                    } {}
+                    } {
+                        println!("[dbg] m={}", m);
+                    }
                 }
 
                 Ok(())
