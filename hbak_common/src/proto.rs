@@ -469,7 +469,10 @@ impl LocalNode {
             .spawn()?;
 
         SnapshotStream::new(
-            BufReader::with_capacity(CHUNKSIZE, cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?),
+            BufReader::with_capacity(
+                2 * CHUNKSIZE,
+                cmd.stdout.ok_or(LocalNodeError::NoBtrfsOutput)?,
+            ),
             &self.config().passphrase,
         )
     }
@@ -490,7 +493,7 @@ impl LocalNode {
             Ok(Box::new(self.send_snapshot(snapshot)?))
         } else {
             Ok(Box::new(BufReader::with_capacity(
-                CHUNKSIZE,
+                2 * CHUNKSIZE,
                 File::open(snapshot.backup_path(self.mode))?,
             )))
         }
@@ -504,7 +507,7 @@ impl LocalNode {
         snapshot: &Snapshot,
     ) -> Result<(), LocalNodeError> {
         let dst = snapshot.backup_path(self.mode);
-        let mut file = BufWriter::with_capacity(CHUNKSIZE, File::create(dst)?);
+        let mut file = BufWriter::with_capacity(2 * CHUNKSIZE, File::create(dst)?);
 
         io::copy(&mut stream, &mut file)?;
         Ok(())
@@ -671,7 +674,7 @@ impl LocalNode {
         Ok((
             cmd,
             RecoveryStream::new(
-                BufWriter::with_capacity(CHUNKSIZE, child_stdin),
+                BufWriter::with_capacity(2 * CHUNKSIZE, child_stdin),
                 &self.config().passphrase,
             ),
         ))
