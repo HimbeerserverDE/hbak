@@ -254,33 +254,28 @@ impl<P: Phase> StreamConn<P> {
     }
 
     fn send_message(&self, message: &StreamMessage) -> Result<(), NetworkError> {
-        // let plaintext = bincode::serialize(message)?;
-        // let ciphertext = self
-        //     .encryptor
-        //     .write()
-        //     .unwrap()
-        //     .encrypt_next(plaintext.as_slice())?;
+        let plaintext = bincode::serialize(message)?;
+        let ciphertext = self
+            .encryptor
+            .write()
+            .unwrap()
+            .encrypt_next(plaintext.as_slice())?;
 
-        // let buf = bincode::serialize(&RawMessage(ciphertext))?;
-        // (&self.stream).write_all(&buf)?;
+        let buf = bincode::serialize(&RawMessage(ciphertext))?;
+        (&self.stream).write_all(&buf)?;
 
-        // Ok(())
-
-        bincode::serialize_into(&self.stream, message)?;
         Ok(())
     }
 
     fn recv_message(&self) -> Result<StreamMessage, NetworkError> {
-        // let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
-        // let plaintext = self
-        //     .decryptor
-        //     .write()
-        //     .unwrap()
-        //     .decrypt_next(ciphertext.0.as_slice())?;
+        let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
+        let plaintext = self
+            .decryptor
+            .write()
+            .unwrap()
+            .decrypt_next(ciphertext.0.as_slice())?;
 
-        // Ok(bincode::deserialize(&plaintext)?)
-
-        Ok(bincode::deserialize_from(&self.stream)?)
+        Ok(bincode::deserialize(&plaintext)?)
     }
 }
 
