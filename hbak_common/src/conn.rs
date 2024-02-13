@@ -262,7 +262,9 @@ impl<P: Phase> StreamConn<P> {
             .encrypt_next(plaintext.as_slice())?;
 
         let buf = bincode::serialize(&RawMessage(ciphertext))?;
-        (&self.stream).write_all(&buf)?;
+        if !matches!(message, StreamMessage::Chunk(_)) {
+            (&self.stream).write_all(&buf)?;
+        }
 
         Ok(())
     }
