@@ -5,9 +5,10 @@ use crate::stream::CHUNKSIZE;
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::{Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
+use std::ops::DerefMut;
 use std::sync::{Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
@@ -105,12 +106,12 @@ impl AuthConn {
         match self.recv_message()? {
             CryptoMessage::Encrypt(encrypt) => {
                 encrypt?;
-                Ok(StreamConn::from_conn(
+                Ok(StreamConn::try_from_conn(
                     self.stream,
                     key,
                     nonce,
                     remote_node_name,
-                ))
+                )?)
             }
             _ => {
                 self.send_message(&CryptoMessage::Error(RemoteError::IllegalTransition))?;
@@ -202,7 +203,7 @@ impl AuthServ {
                 if client_auth.proof.ct_eq(&client_proof).into() {
                     self.send_message(&CryptoMessage::Encrypt(Ok(())))?;
                     Ok((
-                        StreamConn::from_conn(self.stream, key, nonce, remote_node_name),
+                        StreamConn::try_from_conn(self.stream, key, nonce, remote_node_name)?,
                         remote_node_auth,
                     ))
                 } else {
@@ -240,7 +241,8 @@ impl From<TcpStream> for AuthServ {
 /// It is the result of successful authentication and encryption
 /// using an [`AuthConn`] or an [`AuthServ`].
 pub struct StreamConn<P: Phase> {
-    stream: TcpStream,
+    stream_read: Mutex<BufReader<TcpStream>>,
+    stream_write: Mutex<BufWriter<TcpStream>>,
     encryptor: RwLock<EncryptorBE32<XChaCha20Poly1305>>,
     decryptor: RwLock<DecryptorBE32<XChaCha20Poly1305>>,
     remote_node_name: String,
@@ -261,14 +263,16 @@ impl<P: Phase> StreamConn<P> {
             .unwrap()
             .encrypt_next(plaintext.as_slice())?;
 
-        let buf = bincode::serialize(&RawMessage(ciphertext))?;
-        (&self.stream).write_all(&buf)?;
+        let mut w = self.stream_write.lock().unwrap();
+        bincode::serialize_into(w.deref_mut(), &RawMessage(ciphertext))?;
+        w.flush()?;
 
         Ok(())
     }
 
     fn recv_message(&self) -> Result<StreamMessage, NetworkError> {
-        let ciphertext: RawMessage = bincode::deserialize_from(&self.stream)?;
+        let ciphertext: RawMessage =
+            bincode::deserialize_from(self.stream_read.lock().unwrap().deref_mut())?;
         let plaintext = self
             .decryptor
             .write()
@@ -282,22 +286,23 @@ impl<P: Phase> StreamConn<P> {
 impl StreamConn<Idle> {
     /// Constructs a new `StreamConn` from a [`std::net::TcpStream`],
     /// encryption key and nonce.
-    pub(crate) fn from_conn(
+    pub(crate) fn try_from_conn(
         stream: TcpStream,
         key: Vec<u8>,
         nonce: Vec<u8>,
         remote_node_name: String,
-    ) -> Self {
+    ) -> io::Result<Self> {
         let key = Key::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce);
 
-        Self {
-            stream,
+        Ok(Self {
+            stream_read: Mutex::new(BufReader::with_capacity(2 * CHUNKSIZE, stream.try_clone()?)),
+            stream_write: Mutex::new(BufWriter::with_capacity(2 * CHUNKSIZE, stream)),
             encryptor: RwLock::new(EncryptorBE32::new(key, nonce)),
             decryptor: RwLock::new(DecryptorBE32::new(key, nonce)),
             remote_node_name,
             _phase: PhantomData,
-        }
+        })
     }
 
     /// Exchanges synchronization information (timestamps), returning an `Active` `StreamConn`
@@ -311,7 +316,8 @@ impl StreamConn<Idle> {
         match self.recv_message()? {
             StreamMessage::SyncInfo(sync_info) => Ok((
                 StreamConn::<Active> {
-                    stream: self.stream,
+                    stream_read: self.stream_read,
+                    stream_write: self.stream_write,
                     encryptor: self.encryptor,
                     decryptor: self.decryptor,
                     remote_node_name: self.remote_node_name,
