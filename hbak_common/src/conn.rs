@@ -371,6 +371,7 @@ impl StreamConn<Active> {
                     }
                 }
                 StreamMessage::Chunk(chunk) => {
+                    println!("[dbg] chunk recv");
                     if let Some(stream) = &mut stream {
                         match stream.0.write_all(&chunk) {
                             Ok(_) => {}
@@ -384,6 +385,7 @@ impl StreamConn<Active> {
                         stream_conn
                             .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
                     }
+                    println!("[dbg] chunk done");
                 }
                 StreamMessage::End(end) => {
                     end?;
