@@ -411,10 +411,11 @@ impl StreamConn<Active> {
         };
 
         let send_chunk = |stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
-            let mut chunk = Vec::with_capacity(CHUNKSIZE);
+            let mut chunk = vec![0; CHUNKSIZE];
             let n = r.read(&mut chunk)?;
+            chunk.truncate(n);
 
-            if n > 0 {
+            if !chunk.is_empty() {
                 stream_conn.send_message(&StreamMessage::Chunk(chunk))?;
                 Ok(true)
             } else {

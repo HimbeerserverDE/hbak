@@ -60,8 +60,9 @@ impl<B: BufRead> Read for SnapshotStream<B> {
 
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
-            let mut chunk = Vec::with_capacity(CHUNKSIZE);
-            let _ = self.inner.read(&mut chunk)?;
+            let mut chunk = vec![0; CHUNKSIZE];
+            let n = self.inner.read(&mut chunk)?;
+            chunk.truncate(n);
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
             if self.inner.fill_buf().map(|b| !b.is_empty())? {
@@ -149,8 +150,9 @@ impl<W: Write, P: AsRef<[u8]>> RecoveryStream<W, P> {
 
         self.buf.make_contiguous();
 
-        let mut chunk = Vec::with_capacity(CHUNKSIZE);
-        let _ = self.buf.read(&mut chunk)?;
+        let mut chunk = vec![0; CHUNKSIZE];
+        let n = self.buf.read(&mut chunk)?;
+        chunk.truncate(n);
 
         if let Some(cipher) = self.cipher.take() {
             let plain = cipher.decrypt_last(chunk.as_slice())?;
