@@ -5,7 +5,7 @@ use crate::stream::CHUNKSIZE;
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Mutex, RwLock};
@@ -15,7 +15,6 @@ use std::time::Duration;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::stream::{DecryptorBE32, EncryptorBE32};
 use chacha20poly1305::{Key, XChaCha20Poly1305};
-use socket2::Socket;
 use subtle::ConstantTimeEq;
 
 /// Default TCP server port. Not officially reserved.
@@ -56,7 +55,7 @@ pub struct AuthConn {
 impl AuthConn {
     /// Shorthand for `AuthConn::from(TcpStream::connect_timeout(addr, CONNECT_TIMEOUT)?)`.
     pub fn new(addr: &SocketAddr) -> Result<Self, NetworkError> {
-        Ok(TcpStream::connect_timeout(addr, CONNECT_TIMEOUT)?.try_into()?)
+        Ok(TcpStream::connect_timeout(addr, CONNECT_TIMEOUT)?.into())
     }
 
     /// Performs mutual authentication and encryption of the connection
@@ -132,18 +131,9 @@ impl AuthConn {
     }
 }
 
-impl TryFrom<TcpStream> for AuthConn {
-    type Error = io::Error;
-
-    fn try_from(stream: TcpStream) -> io::Result<Self> {
-        let socket = Socket::from(stream);
-
-        socket.set_send_buffer_size(2 * CHUNKSIZE)?;
-        socket.set_recv_buffer_size(2 * CHUNKSIZE)?;
-
-        Ok(Self {
-            stream: socket.into(),
-        })
+impl From<TcpStream> for AuthConn {
+    fn from(stream: TcpStream) -> Self {
+        Self { stream }
     }
 }
 
@@ -239,18 +229,9 @@ impl AuthServ {
     }
 }
 
-impl TryFrom<TcpStream> for AuthServ {
-    type Error = io::Error;
-
-    fn try_from(stream: TcpStream) -> io::Result<Self> {
-        let socket = Socket::from(stream);
-
-        socket.set_send_buffer_size(2 * CHUNKSIZE)?;
-        socket.set_recv_buffer_size(2 * CHUNKSIZE)?;
-
-        Ok(Self {
-            stream: socket.into(),
-        })
+impl From<TcpStream> for AuthServ {
+    fn from(stream: TcpStream) -> Self {
+        Self { stream }
     }
 }
 
