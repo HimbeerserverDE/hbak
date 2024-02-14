@@ -1,12 +1,16 @@
-use hbak_common::conn::{AuthServ, DEFAULT_PORT};
+mod error;
+use error::*;
+
+use hbak_common::conn::{AuthServ, DEFAULT_PORT, READ_TIMEOUT};
 use hbak_common::message::SyncInfo;
 use hbak_common::proto::{LocalNode, Mode, Node, Snapshot};
-use hbak_common::{LocalNodeError, NetworkError, RemoteError};
+use hbak_common::RemoteError;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -42,7 +46,15 @@ fn main() {
     }
 }
 
-fn serve() -> Result<(), LocalNodeError> {
+fn serve() -> Result<()> {
+    let should_exit = Arc::new(AtomicBool::new(false));
+    let should_exit2 = Arc::clone(&should_exit);
+
+    ctrlc::set_handler(move || {
+        println!("[info] Caught SIGINT, SIGTERM or SIGHUP, exiting");
+        should_exit2.store(true, Ordering::SeqCst);
+    })?;
+
     let local_node = Arc::new(LocalNode::new(Mode::Server)?);
 
     let bind_addr = local_node.config().bind_addr.unwrap_or(SocketAddr::new(
@@ -52,23 +64,36 @@ fn serve() -> Result<(), LocalNodeError> {
 
     let listener = TcpListener::bind(bind_addr)?;
 
+    listener.set_nonblocking(true)?;
+
     println!("[info] <{}> Listening", bind_addr);
 
     for stream in listener.incoming() {
-        let stream = stream?;
-        let peer_addr = stream.peer_addr()?;
+        match stream {
+            Ok(stream) => {
+                let peer_addr = stream.peer_addr()?;
 
-        let local_node = Arc::clone(&local_node);
-        thread::spawn(move || match handle_client(&local_node, stream) {
-            Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
-            Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
-        });
+                let local_node = Arc::clone(&local_node);
+                thread::spawn(move || match handle_client(&local_node, stream) {
+                    Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
+                    Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
+                });
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                if should_exit.load(Ordering::SeqCst) {
+                    break;
+                } else {
+                    thread::sleep(READ_TIMEOUT);
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 
-    unreachable!()
+    Ok(())
 }
 
-fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<(), NetworkError> {
+fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
     let peer_addr = stream.peer_addr()?;
 
     let auth_serv = AuthServ::from(stream);
@@ -171,5 +196,7 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<(), Networ
         Ok(())
     };
 
-    stream_conn.data_sync(tx, rx_setup, rx_finish)
+    stream_conn.data_sync(tx, rx_setup, rx_finish)?;
+
+    Ok(())
 }

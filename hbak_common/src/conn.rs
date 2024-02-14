@@ -24,8 +24,9 @@ pub const DEFAULT_PORT: u16 = 20406;
 
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-/// TCP read timeout. Internal value for [`StreamConn::data_sync`] receive thread cancellation.
-const READ_TIMEOUT: Duration = Duration::from_millis(200);
+/// TCP read timeout. Used for cancellation of [`StreamConn::data_sync`] receive thread
+/// and `hbakd` TCP accept loop.
+pub const READ_TIMEOUT: Duration = Duration::from_millis(200);
 
 mod private {
     pub trait Sealed {}
