@@ -172,8 +172,9 @@ impl<W: Write, P: AsRef<[u8]>> Write for RecoveryStream<W, P> {
 
         for byte in buf {
             if let Some(cipher) = &mut self.cipher {
-                if self.buf.len() >= CHUNKSIZE {
-                    let mut chunk = vec![0; CHUNKSIZE];
+                // Read the authentication tag (16 bytes) too, otherwise decryption fails.
+                if self.buf.len() >= 16 + CHUNKSIZE {
+                    let mut chunk = vec![0; 16 + CHUNKSIZE];
                     self.buf.read_exact(&mut chunk)?;
 
                     let plain = cipher
