@@ -432,7 +432,7 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
 
     for subvol in subvols {
         local_sync_info.volumes.insert(
-            Volume::new_local(Mode::Client, subvol.to_string())?,
+            Volume::new_local(local_node, subvol.to_string())?,
             LatestSnapshots::none(),
         );
     }

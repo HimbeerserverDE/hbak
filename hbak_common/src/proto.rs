@@ -180,17 +180,15 @@ pub struct Volume {
 }
 
 impl Volume {
-    /// Constructs a new `Volume` using the local node name
+    /// Constructs a new `Volume` using the name of the provided [`LocalNode`]
     /// and the specified subvolume name.
-    pub fn new_local(mode: Mode, subvol: String) -> Result<Self, LocalNodeError> {
-        let node = LocalNode::new(mode)?;
-
-        if node.owns_subvol(&subvol) {
+    pub fn new_local(local_node: &LocalNode, subvol: String) -> Result<Self, LocalNodeError> {
+        if local_node.owns_subvol(&subvol) {
             return Err(LocalNodeError::NoSuchSubvolume(subvol.clone()));
         }
 
         Ok(Self {
-            node_name: node.name().to_string(),
+            node_name: local_node.name().to_string(),
             subvol,
         })
     }
