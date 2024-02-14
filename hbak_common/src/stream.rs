@@ -177,11 +177,6 @@ impl<W: Write, P: AsRef<[u8]>> Write for RecoveryStream<W, P> {
                     let mut chunk = vec![0; 16 + CHUNKSIZE];
                     self.buf.read_exact(&mut chunk)?;
 
-                    println!(
-                        "[dbg] decrypt n={} 16+CHUNKSIZE={}",
-                        chunk.len(),
-                        16 + CHUNKSIZE
-                    );
                     let plain = cipher
                         .decrypt_next(chunk.as_slice())
                         .map_err(io::Error::other)?;
