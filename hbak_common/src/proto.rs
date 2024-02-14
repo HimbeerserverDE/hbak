@@ -297,8 +297,8 @@ impl Mode {
     /// Returns the correct backup directory for the `Mode`.
     pub fn backup_dir(&self) -> &'static str {
         match self {
-            Self::Client => SNAPSHOT_DIR_C,
-            Self::Server => SNAPSHOT_DIR_S,
+            Self::Client => BACKUP_DIR_C,
+            Self::Server => BACKUP_DIR_S,
         }
     }
 }
