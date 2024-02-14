@@ -447,12 +447,8 @@ impl StreamConn<Active> {
                         .send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
                     while match send_chunk(&stream_conn.read().unwrap(), &mut r) {
-                        Ok(is_data_left) => {
-                            println!("[dbg] sc ok {}", is_data_left);
-                            is_data_left
-                        }
+                        Ok(is_data_left) => is_data_left,
                         Err(e) => {
-                            println!("[dbg] sc err {:?} | {}", e, e);
                             stream_conn
                                 .read()
                                 .unwrap()
