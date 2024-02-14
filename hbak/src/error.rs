@@ -11,12 +11,10 @@ pub enum Error {
     #[error("Unable to parse volume identifier: {0}")]
     HbakVolumeParse(#[from] hbak_common::VolumeParseError),
 
-    #[allow(clippy::enum_variant_names)]
     #[error("Unable to parse network address: {0}")]
-    AddrParseError(#[from] net::AddrParseError),
-    #[allow(clippy::enum_variant_names)]
+    AddrParse(#[from] net::AddrParseError),
     #[error("IO error: {0}")]
-    IoError(#[from] io::Error),
+    Io(#[from] io::Error),
 
     #[error("Hexadecimal decoding error: {0}")]
     HexDecode(#[from] hex::FromHexError),
