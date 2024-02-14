@@ -267,9 +267,7 @@ impl<P: Phase> StreamConn<P> {
             .encrypt_next(plaintext.as_slice())?;
 
         let buf = bincode::serialize(&RawMessage(ciphertext))?;
-        println!("[dbg] write_all");
-        let n = (&self.stream).write(&buf)?;
-        println!("[dbg] ret {}", n);
+        (&self.stream).write_all(&buf)?;
 
         Ok(())
     }
