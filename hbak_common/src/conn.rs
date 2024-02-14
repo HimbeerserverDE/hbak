@@ -470,6 +470,13 @@ impl StreamConn<Active> {
                             {
                                 continue
                             }
+                            bincode::ErrorKind::Io(io_err)
+                                if io_err.kind() == io::ErrorKind::UnexpectedEof
+                                    && *local_done.lock().unwrap()
+                                    && remote_done =>
+                            {
+                                return Ok(())
+                            }
                             _ => return Err(bincode_err.into()),
                         },
                         Err(e) => return Err(e),
