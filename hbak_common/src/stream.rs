@@ -65,7 +65,6 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                 .by_ref()
                 .take(CHUNKSIZE as u64)
                 .read_to_end(&mut chunk)?;
-            println!("[dbg] encrypt n={} CHUNKSIZE={}", chunk.len(), CHUNKSIZE);
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
             if self.inner.fill_buf().map(|b| !b.is_empty())? {
