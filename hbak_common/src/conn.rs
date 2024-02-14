@@ -267,11 +267,8 @@ impl<P: Phase> StreamConn<P> {
             .encrypt_next(plaintext.as_slice())?;
 
         let mut w = self.stream_write.lock().unwrap();
-        println!("[dbg] binser");
         bincode::serialize_into(w.deref_mut(), &RawMessage(ciphertext))?;
-        println!("[dbg] flush");
         w.flush()?;
-        println!("[dbg] done");
 
         Ok(())
     }
