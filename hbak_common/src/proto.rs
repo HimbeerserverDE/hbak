@@ -702,8 +702,25 @@ impl LocalNode {
     /// Restores the latest full or incremental snapshot, whichever is later,
     /// of the specified subvolume. Only uses locally stored snapshots, remote recovery
     /// with the help of [`LocalNode::recover`] may be necessary.
-    pub fn restore(&self, subvol: String) -> Result<(), LocalNodeError> {
+    ///
+    /// # Arguments
+    ///
+    /// * `subvol`: The subvolume to restore.
+    /// * `ignore_fstab`: If the subvolume already exists, don't keep its `fstab(5)`.
+    ///
+    /// If the subvolume exists and the `ignore_fstab` argument is not set,
+    /// the `/etc/fstab` file is saved to memory before restoring
+    /// and written to the restored subvolume afterwards.
+    /// This behavior is the most useful to the majority of users
+    /// since it automatically handles changed UUIDs from OS reinstalls.
+    pub fn restore(&self, subvol: String, ignore_fstab: bool) -> Result<(), LocalNodeError> {
         let subvol_path = Path::new(self.mode.mountpoint()).join(&subvol);
+
+        let fstab = if subvol_path.exists() && !ignore_fstab {
+            Some(fs::read(subvol_path.join("etc/fstab"))?)
+        } else {
+            None
+        };
 
         if subvol_path.exists()
             && !Command::new("btrfs")
@@ -729,6 +746,10 @@ impl LocalNode {
             .success()
         {
             return Err(LocalNodeError::BtrfsCmd);
+        }
+
+        if let Some(fstab) = fstab {
+            fs::write(subvol_path.join("etc/fstab"), fstab)?;
         }
 
         Ok(())
