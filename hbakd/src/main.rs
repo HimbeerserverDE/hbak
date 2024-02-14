@@ -8,11 +8,10 @@ use hbak_common::RemoteError;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{cmp, io, thread};
 
 fn main() {
     match serve() {
@@ -113,9 +112,11 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
         // Full backup: Either restoring or remote is out of date.
         if volume.node_name() == remote_node_auth.node_name {
             let snapshot = local_node.latest_backup_full(volume.clone())?;
-            let r = local_node.export(&snapshot)?;
 
-            tx.push((r, snapshot));
+            if snapshot.taken() > latest_snapshots.last_full {
+                let r = local_node.export(&snapshot)?;
+                tx.push((r, snapshot));
+            }
         } else {
             for snapshot in local_node.all_full_after(volume.clone(), latest_snapshots.last_full)? {
                 let r = local_node.export(&snapshot)?;
@@ -127,7 +128,13 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
         let incr = if volume.node_name() == remote_node_auth.node_name {
             local_node.backup_incremental_after(
                 volume.clone(),
-                local_node.latest_backup_full(volume)?.taken(),
+                cmp::max(
+                    cmp::max(
+                        latest_snapshots.last_full,
+                        local_node.latest_backup_full(volume)?.taken(),
+                    ),
+                    latest_snapshots.last_incremental,
+                ),
             )?
         } else {
             local_node.all_incremental_after(volume, latest_snapshots.last_incremental)?

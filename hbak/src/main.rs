@@ -4,7 +4,7 @@ use error::*;
 use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::conn::{AuthConn, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
-use hbak_common::proto::{LatestSnapshots, LocalNode, Mode, Node, Snapshot, Volume};
+use hbak_common::proto::{LocalNode, Mode, Node, Snapshot, Volume};
 use hbak_common::system;
 use hbak_common::{LocalNodeError, RemoteError};
 
@@ -460,10 +460,10 @@ fn restore(
     };
 
     for subvol in &local_node.config().subvols {
-        local_sync_info.volumes.insert(
-            Volume::new_local(local_node, subvol.to_string())?,
-            LatestSnapshots::none(),
-        );
+        let volume = Volume::new_local(local_node, subvol.to_string())?;
+        local_sync_info
+            .volumes
+            .insert(volume.clone(), local_node.latest_snapshots(volume)?);
     }
 
     let (stream_conn, _) = stream_conn.meta_sync(local_sync_info)?;
