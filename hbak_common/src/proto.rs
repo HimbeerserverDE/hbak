@@ -599,7 +599,7 @@ impl LocalNode {
     pub fn latest_backup_incremental(&self, volume: Volume) -> Result<Snapshot, LocalNodeError> {
         self.all_backups(Some(&volume))?
             .into_iter()
-            .filter(|backup| !backup.is_incremental())
+            .filter(|backup| backup.is_incremental())
             .max_by_key(|backup| backup.taken())
             .ok_or(LocalNodeError::NoIncrementalBackup(volume))
     }
