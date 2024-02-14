@@ -14,35 +14,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use clap::Parser;
-use fork::{daemon, Fork};
-
-#[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-/// Background process to serve push and pull requests.
-struct Args {
-    /// Stay attached to the terminal instead of daemonizing.
-    #[arg(short, long)]
-    debug: bool,
-}
-
 fn main() {
-    let args = Args::parse();
-
-    if args.debug {
-        match serve() {
-            Ok(_) => {}
-            Err(e) => eprintln!("Error: {}", e),
-        }
-    } else {
-        match daemon(false, false) {
-            Ok(Fork::Parent(_)) => {}
-            Ok(Fork::Child) => match serve() {
-                Ok(_) => {}
-                Err(e) => eprintln!("Error: {}", e),
-            },
-            Err(e) => eprintln!("Error: {}", io::Error::from_raw_os_error(e)),
-        }
+    match serve() {
+        Ok(_) => {}
+        Err(e) => eprintln!("Error: {}", e),
     }
 }
 
