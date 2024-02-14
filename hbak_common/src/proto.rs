@@ -183,7 +183,7 @@ impl Volume {
     /// Constructs a new `Volume` using the name of the provided [`LocalNode`]
     /// and the specified subvolume name.
     pub fn new_local(local_node: &LocalNode, subvol: String) -> Result<Self, LocalNodeError> {
-        if local_node.owns_subvol(&subvol) {
+        if !local_node.owns_subvol(&subvol) {
             return Err(LocalNodeError::NoSuchSubvolume(subvol.clone()));
         }
 
