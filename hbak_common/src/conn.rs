@@ -484,7 +484,13 @@ impl StreamConn<Active> {
             });
 
             tx.join().unwrap()?;
+
             *local_done.lock().unwrap() = true;
+            stream_conn
+                .read()
+                .unwrap()
+                .send_message(&StreamMessage::Done)?;
+
             rx.join().unwrap()?;
 
             Ok(())
