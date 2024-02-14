@@ -68,23 +68,23 @@ impl<B: BufRead> Read for SnapshotStream<B> {
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
             if self.inner.fill_buf().map(|b| !b.is_empty())? {
-                self.buf.extend(
-                    self.cipher
-                        .as_mut()
-                        .unwrap()
-                        .encrypt_next(chunk.as_slice())
-                        .map_err(io::Error::other)?
-                        .into_iter(),
-                );
+                let ciphertext = self
+                    .cipher
+                    .as_mut()
+                    .unwrap()
+                    .encrypt_next(chunk.as_slice())
+                    .map_err(io::Error::other)?;
+                println!("[dbg] next np={} nc={}", chunk.len(), ciphertext.len());
+                self.buf.extend(ciphertext.into_iter());
             } else {
-                self.buf.extend(
-                    self.cipher
-                        .take()
-                        .unwrap()
-                        .encrypt_last(chunk.as_slice())
-                        .map_err(io::Error::other)?
-                        .into_iter(),
-                );
+                let ciphertext = self
+                    .cipher
+                    .take()
+                    .unwrap()
+                    .encrypt_last(chunk.as_slice())
+                    .map_err(io::Error::other)?;
+                println!("[dbg] last np={} nc={}", chunk.len(), ciphertext.len());
+                self.buf.extend(ciphertext.into_iter());
                 break;
             }
         }
