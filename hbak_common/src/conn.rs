@@ -399,6 +399,8 @@ impl StreamConn<Active> {
                     end?;
 
                     if let Some(current_stream) = stream.take() {
+                        drop(current_stream.0);
+
                         if let Err(e) = rx_finish(current_stream.1) {
                             stream_conn.send_message(&StreamMessage::Error(e.clone()))?;
                             return Err(e.into());
