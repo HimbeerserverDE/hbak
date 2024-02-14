@@ -24,6 +24,8 @@ pub const DEFAULT_PORT: u16 = 20406;
 
 /// TCP connect timeout. Connection attempt is aborted if remote doesn't respond.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// TCP read timeout. Internal value for [`StreamConn::data_sync`] receive thread cancellation.
+const READ_TIMEOUT: Duration = Duration::from_millis(200);
 
 mod private {
     pub trait Sealed {}
@@ -292,6 +294,8 @@ impl StreamConn<Idle> {
         nonce: Vec<u8>,
         remote_node_name: String,
     ) -> io::Result<Self> {
+        stream.set_read_timeout(Some(READ_TIMEOUT))?;
+
         let key = Key::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce);
 
@@ -457,7 +461,19 @@ impl StreamConn<Active> {
                 let mut remote_done = false;
 
                 while !*local_done.lock().unwrap() || !remote_done {
-                    let message = stream_conn.read().unwrap().recv_message()?;
+                    let message = match stream_conn.read().unwrap().recv_message() {
+                        Ok(message) => message,
+                        Err(NetworkError::Bincode(bincode_err)) => match *bincode_err {
+                            bincode::ErrorKind::Io(io_err)
+                                if io_err.kind() == io::ErrorKind::WouldBlock
+                                    || io_err.kind() == io::ErrorKind::TimedOut =>
+                            {
+                                continue
+                            }
+                            _ => return Err(bincode_err.into()),
+                        },
+                        Err(e) => return Err(e),
+                    };
 
                     if handle(&mut stream_conn.write().unwrap(), message)? {
                         remote_done = true;
