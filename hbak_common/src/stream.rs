@@ -62,6 +62,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
             let mut chunk = vec![0; CHUNKSIZE];
             let n = self.inner.read(&mut chunk)?;
+            println!("[dbg] encrypt n={} CHUNKSIZE={}", n, CHUNKSIZE);
             chunk.truncate(n);
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
