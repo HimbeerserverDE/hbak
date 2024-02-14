@@ -10,7 +10,7 @@ use hbak_common::{LocalNodeError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::Empty;
+use std::io::{BufRead, BufReader, Empty};
 use std::net::SocketAddr;
 use std::sync::Mutex;
 
@@ -468,6 +468,8 @@ fn restore(
         };
 
         for subvol in &local_node.config().subvols {
+            ensure_unmounted(subvol.clone())?;
+
             let volume = Volume::new_local(local_node, subvol.to_string())?;
             local_sync_info
                 .volumes
@@ -533,6 +535,29 @@ fn restore(
         for subvol in &local_node.config().subvols {
             println!("Restoring subvolume {}", subvol);
             local_node.restore(subvol.clone(), ignore_fstab)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_unmounted(subvol: String) -> Result<()> {
+    let file = File::open("/proc/self/mounts")?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+
+        let mountpoint = line
+            .split_whitespace()
+            .nth(1)
+            .ok_or(Error::NoMountpoint(line.clone()))?;
+
+        if line.contains(&format!("subvol=/{}", subvol))
+            && mountpoint != "/mnt/hbak"
+            && mountpoint != "/mnt/hbakd"
+        {
+            return Err(Error::Mounted(subvol));
         }
     }
 

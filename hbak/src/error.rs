@@ -4,6 +4,11 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Subvolume \"{0}\" can't be restored because it is still mounted")]
+    Mounted(String),
+    #[error("No mountpoint in mount entry \"{0}\"")]
+    NoMountpoint(String),
+
     #[error("An error occured on the local node: {0}")]
     HbakLocalNode(#[from] hbak_common::LocalNodeError),
     #[error("A network error occured: {0}")]
