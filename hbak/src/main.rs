@@ -13,8 +13,14 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Empty};
 use std::net::SocketAddr;
 use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
 use clap::{Parser, Subcommand};
+
+/// The grace period between btrfs invocations when restoring.
+/// Ensures that incremental snapshots that depend on each other become accessible in time.
+const BTRFS_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -508,6 +514,7 @@ fn restore(
                 .ok_or(RemoteError::NotStreaming)?;
 
             if child.wait().map_err(|_| RemoteError::RxError)?.success() {
+                thread::sleep(BTRFS_GRACE_PERIOD);
                 Ok(())
             } else {
                 Err(RemoteError::RxError)
