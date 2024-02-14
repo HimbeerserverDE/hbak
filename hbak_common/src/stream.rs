@@ -60,9 +60,11 @@ impl<B: BufRead> Read for SnapshotStream<B> {
 
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
         while self.inner.fill_buf().map(|b| !b.is_empty())? {
-            let mut chunk = vec![0; CHUNKSIZE];
-            let n = self.inner.read(&mut chunk)?;
-            chunk.truncate(n);
+            let mut chunk = Vec::with_capacity(CHUNKSIZE);
+            self.inner
+                .by_ref()
+                .take(CHUNKSIZE as u64)
+                .read_to_end(&mut chunk)?;
 
             // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
             if self.inner.fill_buf().map(|b| !b.is_empty())? {
