@@ -472,6 +472,32 @@ impl LocalNode {
             .collect())
     }
 
+    /// Returns the [`Snapshot`] to use as the parent of another *incremental* [`Snapshot`]
+    /// when exporting. This is the previous incremental snapshot unless there have not been
+    /// any incremental snapshots since the last full snapshot, in which case this method
+    /// returns the full snapshot.
+    pub fn parent_of(&self, child: &Snapshot) -> Result<Snapshot, LocalNodeError> {
+        let previous_full = self
+            .all_snapshots(child.subvol().to_string())?
+            .into_iter()
+            .filter(|snapshot| !snapshot.is_incremental())
+            .filter(|snapshot| snapshot.taken() < child.taken())
+            .max_by_key(|snapshot| snapshot.taken())
+            .ok_or(LocalNodeError::NoFullSnapshot(child.subvol().to_string()))?;
+        let previous_incremental = self
+            .all_snapshots(child.subvol().to_string())?
+            .into_iter()
+            .filter(|snapshot| snapshot.is_incremental())
+            .filter(|snapshot| snapshot.taken() < child.taken())
+            .max_by_key(|snapshot| snapshot.taken());
+
+        [Some(previous_full), previous_incremental]
+            .into_iter()
+            .flatten()
+            .max_by_key(|snapshot| snapshot.taken())
+            .ok_or(LocalNodeError::NoFullSnapshot(child.subvol().to_string()))
+    }
+
     /// Returns a new [`crate::stream::SnapshotStream`]
     /// wrapping the provided [`Snapshot`].
     /// It is an error to call this method on a foreign [`Snapshot`].
@@ -480,12 +506,18 @@ impl LocalNode {
         snapshot: &Snapshot,
     ) -> Result<SnapshotStream<BufReader<ChildStdout>>, LocalNodeError> {
         let src = snapshot.snapshot_path(self.mode);
-        let cmd = Command::new("btrfs")
-            .arg("send")
-            .arg("--compressed-data")
-            .arg(src)
-            .stdout(Stdio::piped())
-            .spawn()?;
+
+        let mut cmd = Command::new("btrfs");
+        let cmd = cmd.arg("send").arg("--compressed-data");
+        let cmd = if snapshot.is_incremental() {
+            cmd.arg("-p")
+                .arg(self.parent_of(snapshot)?.snapshot_path(self.mode))
+        } else {
+            cmd
+        }
+        .arg(src)
+        .stdout(Stdio::piped())
+        .spawn()?;
 
         SnapshotStream::new(
             BufReader::with_capacity(
