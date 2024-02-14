@@ -132,9 +132,10 @@ enum Commands {
         device: String,
         /// The name this node was previously known under.
         node_name: String,
-        /// The network address and optional port of the node to restore from.
-        address: String,
-        /// The subvolumes to limit recovery to.
+        /// The network address and optional port of the node to download from.
+        address: Option<String>,
+        /// The subvolumes to recover.
+        #[arg(short, long)]
         subvols: Vec<String>,
     },
 }
@@ -316,8 +317,13 @@ fn logic() -> Result<()> {
                 },
             )?;
 
-            println!("Restoring from {}...", address);
-            restore(&local_node, &address, no_restore, ignore_fstab)?;
+            if let Some(address) = &address {
+                println!("Restoring from {}...", address);
+            } else {
+                println!("Restoring locally...");
+            }
+
+            restore(&local_node, address.as_deref(), no_restore, ignore_fstab)?;
         }
     }
 
@@ -437,41 +443,42 @@ fn sync(
 
 fn restore(
     local_node: &LocalNode,
-    address: &str,
+    address: Option<&str>,
     no_restore: bool,
     ignore_fstab: bool,
 ) -> Result<()> {
-    let address = match address.parse() {
-        Ok(address) => address,
-        Err(_) => SocketAddr::new(address.parse()?, DEFAULT_PORT),
-    };
+    // Synchronize with remote node if an address was passed in.
+    if let Some(address) = address {
+        let address = match address.parse() {
+            Ok(address) => address,
+            Err(_) => SocketAddr::new(address.parse()?, DEFAULT_PORT),
+        };
 
-    let auth_conn = AuthConn::new(&address)?;
-    let stream_conn = auth_conn.secure_stream(
-        local_node.name().to_string(),
-        address.to_string(),
-        &local_node.config().passphrase,
-    )?;
+        let auth_conn = AuthConn::new(&address)?;
+        let stream_conn = auth_conn.secure_stream(
+            local_node.name().to_string(),
+            address.to_string(),
+            &local_node.config().passphrase,
+        )?;
 
-    println!("Authentication to {} successful", address);
+        println!("Authentication to {} successful", address);
 
-    let mut local_sync_info = SyncInfo {
-        volumes: HashMap::new(),
-    };
+        let mut local_sync_info = SyncInfo {
+            volumes: HashMap::new(),
+        };
 
-    for subvol in &local_node.config().subvols {
-        let volume = Volume::new_local(local_node, subvol.to_string())?;
-        local_sync_info
-            .volumes
-            .insert(volume.clone(), local_node.latest_snapshots(volume)?);
-    }
+        for subvol in &local_node.config().subvols {
+            let volume = Volume::new_local(local_node, subvol.to_string())?;
+            local_sync_info
+                .volumes
+                .insert(volume.clone(), local_node.latest_snapshots(volume)?);
+        }
 
-    let (stream_conn, _) = stream_conn.meta_sync(local_sync_info)?;
+        let (stream_conn, _) = stream_conn.meta_sync(local_sync_info)?;
 
-    let children = Mutex::new(HashMap::new());
+        let children = Mutex::new(HashMap::new());
 
-    let rx_setup =
-        |snapshot: &Snapshot| {
+        let rx_setup = |snapshot: &Snapshot| {
             if !local_node.config().subvols.iter().any(|subvol| {
                 snapshot.subvol() == subvol && snapshot.node_name() == local_node.name()
             }) {
@@ -491,33 +498,34 @@ fn restore(
             Ok(recovery_stream)
         };
 
-    let rx_finish = |snapshot: Snapshot| {
-        println!("Received {} from {}", snapshot, address);
+        let rx_finish = |snapshot: Snapshot| {
+            println!("Received {} from {}", snapshot, address);
 
-        let mut child = children
-            .lock()
-            .unwrap()
-            .remove(&snapshot)
-            .ok_or(RemoteError::NotStreaming)?;
+            let mut child = children
+                .lock()
+                .unwrap()
+                .remove(&snapshot)
+                .ok_or(RemoteError::NotStreaming)?;
 
-        if child.wait().map_err(|_| RemoteError::RxError)?.success() {
-            Ok(())
-        } else {
-            Err(RemoteError::RxError)
-        }
-    };
-
-    match stream_conn.data_sync(Vec::<(Empty, Snapshot)>::default(), rx_setup, rx_finish) {
-        Ok(_) => {}
-        Err(e) => {
-            for (snapshot, child) in children.lock().unwrap().iter_mut() {
-                match child.kill() {
-                    Ok(_) => {}
-                    Err(e) => eprintln!("Cannot kill failed receiver for {}: {}", snapshot, e),
-                }
+            if child.wait().map_err(|_| RemoteError::RxError)?.success() {
+                Ok(())
+            } else {
+                Err(RemoteError::RxError)
             }
+        };
 
-            return Err(e.into());
+        match stream_conn.data_sync(Vec::<(Empty, Snapshot)>::default(), rx_setup, rx_finish) {
+            Ok(_) => {}
+            Err(e) => {
+                for (snapshot, child) in children.lock().unwrap().iter_mut() {
+                    match child.kill() {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Cannot kill failed receiver for {}: {}", snapshot, e),
+                    }
+                }
+
+                return Err(e.into());
+            }
         }
     }
 
