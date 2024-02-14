@@ -11,7 +11,7 @@ use std::fs::{self, File};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 fn main() {
@@ -29,6 +29,8 @@ fn serve() -> Result<()> {
         println!("[info] Caught SIGINT, SIGTERM or SIGHUP, exiting");
         should_exit2.store(true, Ordering::SeqCst);
     })?;
+
+    let client_threads = Arc::new(Mutex::new(0));
 
     let local_node = Arc::new(LocalNode::new(Mode::Server)?);
 
@@ -48,10 +50,17 @@ fn serve() -> Result<()> {
             Ok(stream) => {
                 let peer_addr = stream.peer_addr()?;
 
+                *client_threads.lock().unwrap() += 1;
+
                 let local_node = Arc::clone(&local_node);
-                thread::spawn(move || match handle_client(&local_node, stream) {
-                    Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
-                    Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
+                let client_threads = Arc::clone(&client_threads);
+                thread::spawn(move || {
+                    match handle_client(&local_node, stream) {
+                        Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
+                        Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
+                    }
+
+                    *client_threads.lock().unwrap() -= 1;
                 });
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -63,6 +72,10 @@ fn serve() -> Result<()> {
             }
             Err(e) => return Err(e.into()),
         }
+    }
+
+    while *client_threads.lock().unwrap() > 0 {
+        thread::sleep(READ_TIMEOUT);
     }
 
     Ok(())
