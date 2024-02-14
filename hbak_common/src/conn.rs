@@ -494,6 +494,7 @@ impl StreamConn<Active> {
             });
 
             tx.join().unwrap()?;
+            println!("[dbg] tx joined");
 
             *local_done.lock().unwrap() = true;
             stream_conn
