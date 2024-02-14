@@ -49,12 +49,12 @@ impl<B: BufRead> Read for SnapshotStream<B> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut n = 0;
 
-        while let Some(byte) = self.header.pop_front() {
-            if n >= buf.len() {
-                break;
+        while n < buf.len() {
+            match self.header.pop_front() {
+                None => break,
+                Some(byte) => buf[n] = byte,
             }
 
-            buf[n] = byte;
             n += 1;
         }
 
@@ -89,12 +89,12 @@ impl<B: BufRead> Read for SnapshotStream<B> {
             }
         }
 
-        while let Some(byte) = self.buf.pop_front() {
-            if n >= buf.len() {
-                break;
+        while n < buf.len() {
+            match self.buf.pop_front() {
+                None => break,
+                Some(byte) => buf[n] = byte,
             }
 
-            buf[n] = byte;
             n += 1;
         }
 
@@ -152,7 +152,8 @@ impl<W: Write, P: AsRef<[u8]>> RecoveryStream<W, P> {
 
         self.buf.make_contiguous();
 
-        let mut chunk = vec![0; CHUNKSIZE];
+        // Read the authentication tag (16 bytes) too, otherwise decryption fails.
+        let mut chunk = vec![0; 16 + CHUNKSIZE];
         let n = self.buf.read(&mut chunk)?;
         chunk.truncate(n);
 
