@@ -432,6 +432,18 @@ impl LocalNode {
             .ok_or(LocalNodeError::NoIncrementalSnapshot(subvol))
     }
 
+    /// Returns the latest snapshot, full or incremental, of the specified subvolume of this node.
+    pub fn latest_snapshot(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
+        [
+            Some(self.latest_snapshot_full(subvol.clone())?),
+            self.latest_snapshot_incremental(subvol.clone()).ok(),
+        ]
+        .into_iter()
+        .flatten()
+        .max_by_key(|snapshot| snapshot.taken())
+        .ok_or(LocalNodeError::NoFullSnapshot(subvol))
+    }
+
     /// Returns all full snapshots of the specified subvolume of this node
     /// taken after the provided timestamp.
     pub fn snapshot_full_after(
@@ -685,6 +697,41 @@ impl LocalNode {
                 &self.config().passphrase,
             ),
         ))
+    }
+
+    /// Restores the latest full or incremental snapshot, whichever is later,
+    /// of the specified subvolume. Only uses locally stored snapshots, remote recovery
+    /// with the help of [`LocalNode::recover`] may be necessary.
+    pub fn restore(&self, subvol: String) -> Result<(), LocalNodeError> {
+        let subvol_path = Path::new(self.mode.mountpoint()).join(&subvol);
+
+        if subvol_path.exists()
+            && !Command::new("btrfs")
+                .arg("subvolume")
+                .arg("delete")
+                .arg(&subvol_path)
+                .spawn()?
+                .wait()?
+                .success()
+        {
+            return Err(LocalNodeError::BtrfsCmd);
+        }
+
+        let snapshot = self.latest_snapshot(subvol)?;
+
+        if !Command::new("btrfs")
+            .arg("subvolume")
+            .arg("snapshot")
+            .arg(snapshot.snapshot_path(self.mode))
+            .arg(&subvol_path)
+            .spawn()?
+            .wait()?
+            .success()
+        {
+            return Err(LocalNodeError::BtrfsCmd);
+        }
+
+        Ok(())
     }
 }
 

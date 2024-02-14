@@ -122,6 +122,9 @@ enum Commands {
     },
     /// Restore the local node to the latest remote backup.
     Restore {
+        /// Do not restore the latest snapshots to the subvolumes.
+        #[arg(short = 'r', long)]
+        no_restore: bool,
         /// The device file the local btrfs file system is located at.
         device: String,
         /// The name this node was previously known under.
@@ -288,6 +291,7 @@ fn logic() -> Result<()> {
             }
         }
         Commands::Restore {
+            no_restore,
             device,
             node_name,
             address,
@@ -309,7 +313,7 @@ fn logic() -> Result<()> {
             )?;
 
             println!("Restoring from {}...", address);
-            restore(&local_node, &address)?;
+            restore(&local_node, &address, no_restore)?;
         }
     }
 
@@ -427,7 +431,7 @@ fn sync(
     Ok(())
 }
 
-fn restore(local_node: &LocalNode, address: &str) -> Result<()> {
+fn restore(local_node: &LocalNode, address: &str, no_restore: bool) -> Result<()> {
     let address = match address.parse() {
         Ok(address) => address,
         Err(_) => SocketAddr::new(address.parse()?, DEFAULT_PORT),
@@ -495,7 +499,7 @@ fn restore(local_node: &LocalNode, address: &str) -> Result<()> {
     };
 
     match stream_conn.data_sync(Vec::<(Empty, Snapshot)>::default(), rx_setup, rx_finish) {
-        Ok(_) => Ok(()),
+        Ok(_) => {}
         Err(e) => {
             for (snapshot, child) in children.lock().unwrap().iter_mut() {
                 match child.kill() {
@@ -504,7 +508,16 @@ fn restore(local_node: &LocalNode, address: &str) -> Result<()> {
                 }
             }
 
-            Err(e.into())
+            return Err(e.into());
         }
     }
+
+    if !no_restore {
+        for subvol in &local_node.config().subvols {
+            println!("Restoring subvolume {}", subvol);
+            local_node.restore(subvol.clone())?;
+        }
+    }
+
+    Ok(())
 }
