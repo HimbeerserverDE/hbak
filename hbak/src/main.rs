@@ -375,6 +375,8 @@ fn sync(
 
     let (stream_conn, remote_sync_info) = stream_conn.meta_sync(local_sync_info)?;
 
+    println!("[dbg] {:?}", remote_sync_info);
+
     let mut tx = Vec::new();
     for (volume, latest_snapshots) in remote_sync_info
         .volumes
