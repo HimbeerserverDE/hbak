@@ -193,9 +193,4 @@ pub enum RemoteError {
     /// This is usually caused by a [`std::io::Error`] on the destination stream.
     #[error("Remote node reception failure")]
     RxError,
-    /// The remote node is unable to continue streaming *its* transmission.
-    /// This is usually caused by a [`std::io::Error`] on the source stream
-    /// or the network connection (or its encryption).
-    #[error("Remote node transmission failure")]
-    TxError,
 }

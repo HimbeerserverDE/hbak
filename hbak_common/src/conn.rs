@@ -446,16 +446,7 @@ impl StreamConn<Active> {
                         .unwrap()
                         .send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
-                    while match send_chunk(&stream_conn.read().unwrap(), &mut r) {
-                        Ok(is_data_left) => is_data_left,
-                        Err(e) => {
-                            stream_conn
-                                .read()
-                                .unwrap()
-                                .send_message(&StreamMessage::End(Err(RemoteError::TxError)))?;
-                            return Err(e);
-                        }
-                    } {}
+                    while send_chunk(&stream_conn.read().unwrap(), &mut r)? {}
                 }
 
                 Ok(())
