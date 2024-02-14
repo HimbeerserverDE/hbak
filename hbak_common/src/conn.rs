@@ -9,7 +9,7 @@ use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::ops::DerefMut;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -357,12 +357,16 @@ impl StreamConn<Active> {
         let stream_conn = RwLock::new(self);
 
         let mut stream = None;
+        let start_streaming = Arc::new(Mutex::new(false));
 
         let mut handle = |stream_conn: &mut Self,
                           message: StreamMessage|
          -> Result<bool, NetworkError> {
             match message {
-                StreamMessage::Stream(stream) => stream?,
+                StreamMessage::Stream(stream) => {
+                    *start_streaming.lock().unwrap() = true;
+                    stream?;
+                }
                 StreamMessage::Replicate(replicate) => {
                     if stream.is_none() {
                         match rx_setup(&replicate.snapshot) {
@@ -445,6 +449,11 @@ impl StreamConn<Active> {
                         .read()
                         .unwrap()
                         .send_message(&StreamMessage::Replicate(snapshot.into()))?;
+
+                    while !*start_streaming.lock().unwrap() {
+                        thread::sleep(READ_TIMEOUT);
+                    }
+                    *start_streaming.lock().unwrap() = false;
 
                     while send_chunk(&stream_conn.read().unwrap(), &mut r)? {}
                 }
