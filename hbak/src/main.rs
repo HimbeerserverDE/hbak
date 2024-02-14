@@ -468,8 +468,6 @@ fn restore(
         };
 
         for subvol in &local_node.config().subvols {
-            ensure_unmounted(subvol.clone())?;
-
             let volume = Volume::new_local(local_node, subvol.to_string())?;
             local_sync_info
                 .volumes
@@ -533,6 +531,8 @@ fn restore(
 
     if !no_restore {
         for subvol in &local_node.config().subvols {
+            ensure_unmounted(subvol.clone())?;
+
             println!("Restoring subvolume {}", subvol);
             local_node.restore(subvol.clone(), ignore_fstab)?;
         }
