@@ -122,6 +122,10 @@ enum Commands {
     },
     /// Restore the local node to the latest remote backup.
     Restore {
+        /// The device file the local btrfs file system is located at.
+        device: String,
+        /// The name this node was previously known under.
+        node_name: String,
         /// The network address and optional port of the node to restore from.
         address: String,
         /// The subvolumes to limit recovery to.
@@ -283,17 +287,29 @@ fn logic() -> Result<()> {
                 sync(&local_node, remote_node, &push, &pull)?;
             }
         }
-        Commands::Restore { address, subvols } => {
-            let local_node = LocalNode::new(Mode::Client)?;
+        Commands::Restore {
+            device,
+            node_name,
+            address,
+            subvols,
+        } => {
+            let passphrase = rpassword::prompt_password("Enter passphrase: ")?;
 
-            let subvols = if !subvols.is_empty() {
-                &subvols
-            } else {
-                &local_node.config().subvols
-            };
+            let local_node = LocalNode::with_config(
+                Mode::Client,
+                NodeConfig {
+                    device,
+                    bind_addr: None,
+                    node_name,
+                    subvols,
+                    passphrase,
+                    remotes: Vec::default(),
+                    auth: Vec::default(),
+                },
+            )?;
 
             println!("Restoring from {}...", address);
-            restore(&local_node, &address, subvols)?;
+            restore(&local_node, &address)?;
         }
     }
 
@@ -411,7 +427,7 @@ fn sync(
     Ok(())
 }
 
-fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<()> {
+fn restore(local_node: &LocalNode, address: &str) -> Result<()> {
     let address = match address.parse() {
         Ok(address) => address,
         Err(_) => SocketAddr::new(address.parse()?, DEFAULT_PORT),
@@ -430,7 +446,7 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
         volumes: HashMap::new(),
     };
 
-    for subvol in subvols {
+    for subvol in &local_node.config().subvols {
         local_sync_info.volumes.insert(
             Volume::new_local(local_node, subvol.to_string())?,
             LatestSnapshots::none(),
@@ -441,25 +457,26 @@ fn restore(local_node: &LocalNode, address: &str, subvols: &[String]) -> Result<
 
     let children = Mutex::new(HashMap::new());
 
-    let rx_setup = |snapshot: &Snapshot| {
-        if !subvols
-            .iter()
-            .any(|subvol| snapshot.subvol() == subvol && snapshot.node_name() == local_node.name())
-        {
-            return Err(RemoteError::AccessDenied);
-        }
+    let rx_setup =
+        |snapshot: &Snapshot| {
+            if !local_node.config().subvols.iter().any(|subvol| {
+                snapshot.subvol() == subvol && snapshot.node_name() == local_node.name()
+            }) {
+                return Err(RemoteError::AccessDenied);
+            }
 
-        if snapshot.snapshot_path(Mode::Client).exists() {
-            return Err(RemoteError::Immutable);
-        }
+            if snapshot.snapshot_path(Mode::Client).exists() {
+                return Err(RemoteError::Immutable);
+            }
 
-        let (child, recovery_stream) = local_node.recover().map_err(|_| RemoteError::RxError)?;
-        children.lock().unwrap().insert(snapshot.clone(), child);
+            let (child, recovery_stream) =
+                local_node.recover().map_err(|_| RemoteError::RxError)?;
+            children.lock().unwrap().insert(snapshot.clone(), child);
 
-        println!("Receiving {} from {}", snapshot, address);
+            println!("Receiving {} from {}", snapshot, address);
 
-        Ok(recovery_stream)
-    };
+            Ok(recovery_stream)
+        };
 
     let rx_finish = |snapshot: Snapshot| {
         println!("Received {} from {}", snapshot, address);

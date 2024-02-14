@@ -310,8 +310,17 @@ pub struct LocalNode {
 
 impl LocalNode {
     /// Returns a new `LocalNode` representing the local machine.
+    /// Shorthand for `LocalNode::with_config(mode, NodeConfig::load()?)`.
     pub fn new(mode: Mode) -> Result<Self, LocalNodeError> {
         let config = NodeConfig::load()?;
+        Self::with_config(mode, config)
+    }
+
+    /// Returns a new `LocalNode` representing the local machine.
+    /// The configuration is provided by the caller and **not** loaded from disk.
+    /// The purpose of this method is to make recovery possible
+    /// without requiring tedious pre-initialization by the user.
+    pub fn with_config(mode: Mode, config: NodeConfig) -> Result<Self, LocalNodeError> {
         let device = config.device.clone();
 
         fs::create_dir_all(MOUNTPOINTC)?;
