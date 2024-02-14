@@ -296,7 +296,6 @@ impl StreamConn<Idle> {
         remote_node_name: String,
     ) -> io::Result<Self> {
         stream.set_read_timeout(Some(READ_TIMEOUT))?;
-        stream.set_write_timeout(Some(CONNECT_TIMEOUT))?;
 
         let key = Key::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce);
