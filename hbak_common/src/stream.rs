@@ -40,7 +40,7 @@ impl<B: BufRead> SnapshotStream<B> {
             inner,
             cipher: Some(cipher),
             header: nonce.to_vec().into(),
-            buf: VecDeque::new(),
+            buf: VecDeque::with_capacity(16 + CHUNKSIZE), // Accomodate authentication tag (16 bytes).
         })
     }
 }
@@ -125,7 +125,7 @@ impl<W: Write, P: AsRef<[u8]>> RecoveryStream<W, P> {
             passphrase,
             closed: false,
             cipher: None,
-            buf: VecDeque::new(),
+            buf: VecDeque::with_capacity(16 + CHUNKSIZE), // Accomodate authentication tag (16 bytes).
         }
     }
 
