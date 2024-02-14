@@ -5,7 +5,7 @@ use crate::stream::CHUNKSIZE;
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::ops::DerefMut;
@@ -244,8 +244,8 @@ impl From<TcpStream> for AuthServ {
 /// It is the result of successful authentication and encryption
 /// using an [`AuthConn`] or an [`AuthServ`].
 pub struct StreamConn<P: Phase> {
-    stream: TcpStream,
     stream_read: Mutex<BufReader<TcpStream>>,
+    stream_write: Mutex<BufWriter<TcpStream>>,
     encryptor: Mutex<EncryptorBE32<XChaCha20Poly1305>>,
     decryptor: Mutex<DecryptorBE32<XChaCha20Poly1305>>,
     remote_node_name: String,
@@ -266,8 +266,9 @@ impl<P: Phase> StreamConn<P> {
             .unwrap()
             .encrypt_next(plaintext.as_slice())?;
 
-        let buf = bincode::serialize(&RawMessage(ciphertext))?;
-        (&self.stream).write_all(&buf)?;
+        let mut w = self.stream_write.lock().unwrap();
+        bincode::serialize_into(w.deref_mut(), &RawMessage(ciphertext))?;
+        w.flush()?;
 
         Ok(())
     }
@@ -301,7 +302,7 @@ impl StreamConn<Idle> {
 
         Ok(Self {
             stream_read: Mutex::new(BufReader::with_capacity(2 * CHUNKSIZE, stream.try_clone()?)),
-            stream,
+            stream_write: Mutex::new(BufWriter::with_capacity(2 * CHUNKSIZE, stream)),
             encryptor: Mutex::new(EncryptorBE32::new(key, nonce)),
             decryptor: Mutex::new(DecryptorBE32::new(key, nonce)),
             remote_node_name,
@@ -320,8 +321,8 @@ impl StreamConn<Idle> {
         match self.recv_message()? {
             StreamMessage::SyncInfo(sync_info) => Ok((
                 StreamConn::<Active> {
-                    stream: self.stream,
                     stream_read: self.stream_read,
+                    stream_write: self.stream_write,
                     encryptor: self.encryptor,
                     decryptor: self.decryptor,
                     remote_node_name: self.remote_node_name,
