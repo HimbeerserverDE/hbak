@@ -95,6 +95,9 @@ pub fn deinit(remove_backups: bool) -> Result<(), LocalNodeError> {
 
     fs::remove_file(NodeConfig::PATH)?;
 
+    fs::remove_dir(MOUNTPOINTC)?;
+    fs::remove_dir(MOUNTPOINTS)?;
+
     Ok(())
 }
 
