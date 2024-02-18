@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+
+name="${RC_SVCNAME}"
+
+command="/usr/bin/hbakd"
+command_args=""
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+	need net
+	provide hbakd
+}
