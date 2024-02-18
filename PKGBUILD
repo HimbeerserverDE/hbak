@@ -12,16 +12,16 @@ makedepends=('rust' 'cargo' 'gcc')
 provides=('hbak')
 conflicts=('hbak')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/HimbeerserverDE/hbak/archive/${pkgver}.tar.gz")
-sha256sums=('dc0e5edc0b827aa5f20d59a3bf09b45c8709f2bad8bc02fee15286ced51c496b')
+sha512sums=('80d86a26c5a3e6773220700a4927ac67509d7593a6486c5a4f4f077b4d5602f595bd987989ec977245de65a87f8139e38f29d5843a3a8c247c72af85cf5ab9df')
 
 
 build() {
-	cd "${srcdir}/${pkgname}-${pkgver}"
+	cd "${builddir}"
 	cargo build --release --all --target-dir "./target"
 }
 
 package() {
-	cd "${srcdir}/${pkgname}-${pkgver}"
+	cd "${builddir}"
 
 	# Install binaries.
 	install -Dm 755 "target/release/${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
