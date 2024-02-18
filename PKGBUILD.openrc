@@ -1,0 +1,24 @@
+# Maintainer: Himbeer <https://github.com/HimbeerserverDE/hbak>
+
+pkgname=hbak-openrc
+_pkgname=hbak
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="OpenRC support for hbak."
+arch=('any')
+url="https://github.com/HimbeerserverDE/hbak"
+license=('GPL-3.0-or-later')
+depends=('openrc')
+makedepends=()
+provides=('hbak-openrc')
+conflicts=('hbak-openrc')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/HimbeerserverDE/hbak/archive/${pkgver}.tar.gz")
+sha256sums=('75d618e8dfd194bbc8910a7ab1c863af5a4cc8d6b9f757e585a97d595986092c')
+
+
+package() {
+	cd "${srcdir}/${_pkgname}-${pkgver}"
+
+	# Install OpenRC service script.
+	install -Dm 755 "${_pkgname}d.initd" "${pkgdir}/etc/init.d/${_pkgname}d"
+}
