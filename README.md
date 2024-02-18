@@ -18,6 +18,24 @@ makepkg -si
 makepkg -si -p PKGBUILD.openrc
 ```
 
+Alpine
+------
+
+Cross-compile the binaries:
+
+```
+cargo build --release --all --target <ARCH>-unknown-linux-musl
+```
+
+Then copy the following files to the correct locations on the host:
+
+```
+install -Dm 755 hbak /usr/bin/hbak
+install -Dm 755 hbakd /usr/bin/hbakd
+
+install -Dm 755 hbakd.initd /etc/init.d/hbakd
+```
+
 Architecture
 ============
 
