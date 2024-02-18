@@ -337,7 +337,7 @@ checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 
 [[package]]
 name = "hbak"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "hbak_common",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "hbak_common"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "argon2",
  "bincode",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "hbakd"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "ctrlc",
  "hbak_common",
