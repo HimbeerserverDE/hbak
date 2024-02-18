@@ -7,6 +7,17 @@ This project aims to automate decentralised and end-to-end encrypted
 backups of all of my machines and to provide a simple command-line interface
 for administration and recovery.
 
+Install
+=======
+
+Artix Linux
+-----------
+
+```
+makepkg -si
+makepkg -si -p PKGBUILD.openrc
+```
+
 Architecture
 ============
 
