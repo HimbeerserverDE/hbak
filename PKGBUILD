@@ -1,7 +1,7 @@
 # Maintainer: Himbeer <https://github.com/HimbeerserverDE/hbak>
 
 pkgname=hbak
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Simple distributed backup utility for btrfs."
 arch=('x86_64' 'aarch64')
