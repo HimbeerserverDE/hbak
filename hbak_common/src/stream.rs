@@ -89,8 +89,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                         .as_mut()
                         .unwrap()
                         .encrypt_next(chunk.as_slice())
-                        .map_err(io::Error::other)?
-                        .into_iter(),
+                        .map_err(io::Error::other)?,
                 );
             } else {
                 self.buf.extend(
@@ -98,8 +97,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                         .take()
                         .unwrap()
                         .encrypt_last(chunk.as_slice())
-                        .map_err(io::Error::other)?
-                        .into_iter(),
+                        .map_err(io::Error::other)?,
                 );
             }
         }
