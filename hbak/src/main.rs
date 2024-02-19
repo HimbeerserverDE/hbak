@@ -371,7 +371,10 @@ fn sync(
         &local_node.config().passphrase,
     )?;
 
-    eprintln!("Authentication to {} successful", remote_node.address);
+    eprintln!(
+        "Authentication to and of {} successful",
+        remote_node.address
+    );
 
     let mut local_sync_info = SyncInfo {
         volumes: HashMap::new(),
@@ -477,7 +480,7 @@ fn restore(
             &local_node.config().passphrase,
         )?;
 
-        eprintln!("Authentication to {} successful", address);
+        eprintln!("Authentication to and of {} successful", address);
 
         let mut local_sync_info = SyncInfo {
             volumes: HashMap::new(),
