@@ -65,20 +65,12 @@ impl<B: BufRead> SnapshotStream<B> {
 
 impl<B: BufRead> Read for SnapshotStream<B> {
     fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
-        let initial_len = buf.len();
+        let tmp = self.fill_buf()?;
 
-        while !buf.is_empty() {
-            let tmp = self.fill_buf()?;
-            if tmp.is_empty() {
-                break;
-            }
-            let n = tmp.len();
+        let n = buf.write(tmp)?;
+        self.consume(n);
 
-            buf.write_all(tmp)?;
-            self.consume(n);
-        }
-
-        Ok(initial_len - buf.len())
+        Ok(n)
     }
 }
 
