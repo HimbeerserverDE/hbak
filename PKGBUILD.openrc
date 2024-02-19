@@ -13,7 +13,7 @@ makedepends=()
 provides=('hbak-openrc')
 conflicts=('hbak-openrc')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/HimbeerserverDE/hbak/archive/${pkgver}.tar.gz")
-sha512sums=('0cd0948c47a1456e916c23282c4a66d4029ee3388415dea6084cb7738b1f8536e8f9437ca919c4c4a2f4db6414203ccad0d8f90dfc05a8c355991bee6c39533d')
+sha512sums=('b0ad382043a01eff8dc6b1ef0f68605467662892cd2339e30a37e6f1fe58360c64083dfef0a13ff9e0bd784be3d3c7e8a96f06db59ccde55892eee8e814dda99')
 
 
 package() {
