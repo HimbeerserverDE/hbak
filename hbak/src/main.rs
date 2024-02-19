@@ -289,7 +289,7 @@ fn logic() -> Result<()> {
                     return Err(LocalNodeError::ForeignSubvolume(subvol.clone()).into());
                 }
 
-                println!("Snapshotting {}...", subvol);
+                eprintln!("Snapshotting {}...", subvol);
                 local_node.snapshot_now(subvol.clone(), incremental)?;
             }
         }
@@ -306,7 +306,7 @@ fn logic() -> Result<()> {
                 .iter()
                 .filter(|item| remote_nodes.is_empty() || remote_nodes.contains(&item.address))
             {
-                println!("Synchronizing with {}...", remote_node.address);
+                eprintln!("Synchronizing with {}...", remote_node.address);
                 sync(&local_node, remote_node, &push, &pull)?;
             }
         }
@@ -334,9 +334,9 @@ fn logic() -> Result<()> {
             )?;
 
             if let Some(address) = &address {
-                println!("Restoring from {}...", address);
+                eprintln!("Restoring from {}...", address);
             } else {
-                println!("Restoring locally...");
+                eprintln!("Restoring locally...");
             }
 
             restore(&local_node, address.as_deref(), no_restore, ignore_fstab)?;
@@ -371,7 +371,7 @@ fn sync(
         &local_node.config().passphrase,
     )?;
 
-    println!("Authentication to {} successful", remote_node.address);
+    eprintln!("Authentication to {} successful", remote_node.address);
 
     let mut local_sync_info = SyncInfo {
         volumes: HashMap::new(),
@@ -414,7 +414,7 @@ fn sync(
     }
 
     for (_, snapshot) in &tx {
-        println!(
+        eprintln!(
             "Queueing {} for transmission to {}",
             snapshot, remote_node.address
         );
@@ -435,7 +435,7 @@ fn sync(
             let file = File::create(snapshot.streaming_path(Mode::Client))
                 .map_err(|_| RemoteError::RxError)?;
 
-            println!("Receiving {} from {}", snapshot, remote_node.address);
+            eprintln!("Receiving {} from {}", snapshot, remote_node.address);
 
             Ok(file)
         };
@@ -447,7 +447,7 @@ fn sync(
         )
         .map_err(|_| RemoteError::RxError)?;
 
-        println!("Received {} from {}", snapshot, remote_node.address);
+        eprintln!("Received {} from {}", snapshot, remote_node.address);
 
         Ok(())
     };
@@ -477,7 +477,7 @@ fn restore(
             &local_node.config().passphrase,
         )?;
 
-        println!("Authentication to {} successful", address);
+        eprintln!("Authentication to {} successful", address);
 
         let mut local_sync_info = SyncInfo {
             volumes: HashMap::new(),
@@ -509,13 +509,13 @@ fn restore(
                 local_node.recover().map_err(|_| RemoteError::RxError)?;
             children.lock().unwrap().insert(snapshot.clone(), child);
 
-            println!("Receiving {} from {}", snapshot, address);
+            eprintln!("Receiving {} from {}", snapshot, address);
 
             Ok(recovery_stream)
         };
 
         let rx_finish = |snapshot: Snapshot| {
-            println!("Received {} from {}", snapshot, address);
+            eprintln!("Received {} from {}", snapshot, address);
 
             let mut child = children
                 .lock()
@@ -549,7 +549,7 @@ fn restore(
         for subvol in &local_node.config().subvols {
             ensure_unmounted(subvol.clone())?;
 
-            println!("Restoring subvolume {}", subvol);
+            eprintln!("Restoring subvolume {}", subvol);
             local_node.restore(subvol.clone(), ignore_fstab)?;
         }
     }
