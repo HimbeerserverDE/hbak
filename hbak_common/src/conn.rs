@@ -444,7 +444,7 @@ impl StreamConn<Active> {
         };
 
         let send_chunk = |stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
-            let mut chunk = vec![0; CHUNKSIZE];
+            let mut chunk = vec![0; 16 + CHUNKSIZE];
             let n = r.read(&mut chunk)?;
             chunk.truncate(n);
 
