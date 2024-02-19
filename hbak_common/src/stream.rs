@@ -40,8 +40,7 @@ pub struct SnapshotStream<B: BufRead> {
     // to the `SnapshotStream` (so that `SnapshotStream::read_data`
     // can be called multiple times).
     cipher: Option<EncryptorBE32<XChaCha20Poly1305>>,
-    header: VecDeque<u8>,
-    buf: VecDeque<u8>,
+    buf: Vec<u8>,
 }
 
 impl<B: BufRead> SnapshotStream<B> {
@@ -52,30 +51,41 @@ impl<B: BufRead> SnapshotStream<B> {
         let key = Key::from_slice(&key_array);
         let cipher = EncryptorBE32::new(key, &nonce);
 
+        // Accomodate authentication tag (16 bytes).
+        let mut buf = Vec::with_capacity(16 + CHUNKSIZE);
+        buf.extend(nonce);
+
         Ok(Self {
             inner,
             cipher: Some(cipher),
-            header: nonce.to_vec().into(),
-            buf: VecDeque::with_capacity(16 + CHUNKSIZE), // Accomodate authentication tag (16 bytes).
+            buf,
         })
     }
 }
 
 impl<B: BufRead> Read for SnapshotStream<B> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut n = 0;
+    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+        let initial_len = buf.len();
 
-        while n < buf.len() {
-            match self.header.pop_front() {
-                None => break,
-                Some(byte) => buf[n] = byte,
+        while !buf.is_empty() {
+            let tmp = self.fill_buf()?;
+            if tmp.is_empty() {
+                break;
             }
+            let n = tmp.len();
 
-            n += 1;
+            buf.write_all(tmp)?;
+            self.consume(n);
         }
 
+        Ok(initial_len - buf.len())
+    }
+}
+
+impl<B: BufRead> BufRead for SnapshotStream<B> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-        if self.inner.fill_buf().map(|b| !b.is_empty())? {
+        if self.buf.is_empty() && self.inner.fill_buf().map(|b| !b.is_empty())? {
             let mut chunk = Vec::with_capacity(CHUNKSIZE);
             self.inner
                 .by_ref()
@@ -102,16 +112,15 @@ impl<B: BufRead> Read for SnapshotStream<B> {
             }
         }
 
-        while n < buf.len() {
-            match self.buf.pop_front() {
-                None => break,
-                Some(byte) => buf[n] = byte,
-            }
+        Ok(&self.buf)
+    }
 
-            n += 1;
-        }
-
-        Ok(n)
+    fn consume(&mut self, amt: usize) {
+        // It's okay to panic if amt > self.buf.len()
+        // since [`BufRead::consume`] requires the caller to pass in
+        // amt <= self.buf.len() and silently clamping amt is probably bad
+        // behavior.
+        self.buf.drain(..amt);
     }
 }
 
