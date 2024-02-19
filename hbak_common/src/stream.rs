@@ -75,7 +75,7 @@ impl<B: BufRead> Read for SnapshotStream<B> {
         }
 
         // Stable version of [`BufRead::has_data_left`] (tracking issue: #86423).
-        while self.inner.fill_buf().map(|b| !b.is_empty())? {
+        if self.inner.fill_buf().map(|b| !b.is_empty())? {
             let mut chunk = Vec::with_capacity(CHUNKSIZE);
             self.inner
                 .by_ref()
@@ -101,7 +101,6 @@ impl<B: BufRead> Read for SnapshotStream<B> {
                         .map_err(io::Error::other)?
                         .into_iter(),
                 );
-                break;
             }
         }
 
