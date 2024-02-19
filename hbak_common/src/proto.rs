@@ -405,6 +405,9 @@ impl LocalNode {
             .arg("-r")
             .arg(src)
             .arg(dst)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?
             .wait()?
             .success()
@@ -532,7 +535,9 @@ impl LocalNode {
             cmd
         }
         .arg(src)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()?;
 
         SnapshotStream::new(
@@ -734,6 +739,8 @@ impl LocalNode {
             .arg("receive")
             .arg(dst)
             .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?;
 
         let child_stdin = cmd.stdin.take().ok_or(LocalNodeError::NoBtrfsInput)?;
@@ -775,6 +782,9 @@ impl LocalNode {
                 .arg("subvolume")
                 .arg("delete")
                 .arg(&subvol_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .spawn()?
                 .wait()?
                 .success()
@@ -789,6 +799,9 @@ impl LocalNode {
             .arg("snapshot")
             .arg(snapshot.snapshot_path(self.mode))
             .arg(&subvol_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?
             .wait()?
             .success()

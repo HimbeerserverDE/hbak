@@ -22,7 +22,7 @@ use std::fs;
 use std::io::BufRead;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use argon2::Argon2;
 use hmac::{Hmac, Mac};
@@ -78,6 +78,9 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
         .arg("subvolume")
         .arg("create")
         .arg(SNAPSHOT_DIR_C)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()?
         .wait()?
         .success()
@@ -89,6 +92,9 @@ fn init_btrfs(device: &str) -> Result<(), LocalNodeError> {
         .arg("subvolume")
         .arg("create")
         .arg(BACKUP_DIR_C)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()?
         .wait()?
         .success()
@@ -133,6 +139,9 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
         .arg("subvolume")
         .arg("delete")
         .arg(BACKUP_DIR_C)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()?
         .wait()?
         .success()
@@ -145,6 +154,7 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
         .arg("list")
         .arg("-o")
         .arg(SNAPSHOT_DIR_C)
+        .stdin(Stdio::null())
         .output()?;
     if !output.status.success() {
         return Err(LocalNodeError::BtrfsCmd);
@@ -164,6 +174,9 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
             .arg("subvolume")
             .arg("delete")
             .arg(subvol?)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?
             .wait()?
             .success()
@@ -176,6 +189,9 @@ fn deinit_btrfs() -> Result<(), LocalNodeError> {
         .arg("subvolume")
         .arg("delete")
         .arg(SNAPSHOT_DIR_C)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()?
         .wait()?
         .success()

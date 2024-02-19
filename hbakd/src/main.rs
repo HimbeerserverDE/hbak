@@ -45,28 +45,30 @@ fn main() {
     let args = Args::parse();
 
     if args.debug {
-        match serve() {
+        match serve(args.debug) {
             Ok(_) => {}
             Err(e) => eprintln!("Error: {}", e),
         }
     } else {
         match daemon(false, false) {
             Ok(Fork::Parent(_)) => {}
-            Ok(Fork::Child) => match serve() {
-                Ok(_) => {}
-                Err(e) => eprintln!("Error: {}", e),
-            },
+            Ok(Fork::Child) => {
+                let _ = serve(args.debug);
+            }
             Err(e) => eprintln!("Error: {}", io::Error::from_raw_os_error(e)),
         }
     }
 }
 
-fn serve() -> Result<()> {
+fn serve(debug: bool) -> Result<()> {
     let should_exit = Arc::new(AtomicBool::new(false));
     let should_exit2 = Arc::clone(&should_exit);
 
     ctrlc::set_handler(move || {
-        println!("[info] Caught SIGINT, SIGTERM or SIGHUP, exiting");
+        if debug {
+            println!("[info] Caught SIGINT, SIGTERM or SIGHUP, exiting");
+        }
+
         should_exit2.store(true, Ordering::SeqCst);
     })?;
 
@@ -83,7 +85,9 @@ fn serve() -> Result<()> {
 
     listener.set_nonblocking(true)?;
 
-    println!("[info] <{}> Listening", bind_addr);
+    if debug {
+        println!("[info] <{}> Listening", bind_addr);
+    }
 
     for stream in listener.incoming() {
         match stream {
@@ -95,9 +99,15 @@ fn serve() -> Result<()> {
                 let local_node = Arc::clone(&local_node);
                 let client_threads = Arc::clone(&client_threads);
                 thread::spawn(move || {
-                    match handle_client(&local_node, stream) {
-                        Ok(_) => println!("[info] <{}> Disconnected", peer_addr),
-                        Err(e) => eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e),
+                    match handle_client(debug, &local_node, stream) {
+                        Ok(_) if debug => {
+                            println!("[info] <{}> Disconnected", peer_addr)
+                        }
+                        Ok(_) => {}
+                        Err(e) if debug => {
+                            eprintln!("[warn] <{}> Cannot handle client: {}", peer_addr, e)
+                        }
+                        Err(_) => {}
                     }
 
                     *client_threads.lock().unwrap() -= 1;
@@ -121,17 +131,19 @@ fn serve() -> Result<()> {
     Ok(())
 }
 
-fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
+fn handle_client(debug: bool, local_node: &LocalNode, stream: TcpStream) -> Result<()> {
     let peer_addr = stream.peer_addr()?;
 
     let auth_serv = AuthServ::from(stream);
     let (stream_conn, remote_node_auth) =
         auth_serv.secure_stream(local_node.config().auth.clone())?;
 
-    println!(
-        "[info] <{}@{}> Authentication successful",
-        remote_node_auth.node_name, peer_addr
-    );
+    if debug {
+        println!(
+            "[info] <{}@{}> Authentication successful",
+            remote_node_auth.node_name, peer_addr
+        );
+    }
 
     let mut local_sync_info = SyncInfo {
         volumes: HashMap::new(),
@@ -187,11 +199,13 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
         }
     }
 
-    for (_, snapshot) in &tx {
-        println!(
-            "[info] <{}@{}> Queueing {} for transmission",
-            remote_node_auth.node_name, peer_addr, snapshot
-        );
+    if debug {
+        for (_, snapshot) in &tx {
+            println!(
+                "[info] <{}@{}> Queueing {} for transmission",
+                remote_node_auth.node_name, peer_addr, snapshot
+            );
+        }
     }
 
     let rx_setup =
@@ -209,10 +223,12 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
             let file = File::create(snapshot.streaming_path(Mode::Server))
                 .map_err(|_| RemoteError::RxError)?;
 
-            println!(
-                "[info] <{}@{}> Receiving {}",
-                remote_node_auth.node_name, peer_addr, snapshot
-            );
+            if debug {
+                println!(
+                    "[info] <{}@{}> Receiving {}",
+                    remote_node_auth.node_name, peer_addr, snapshot
+                );
+            }
 
             Ok(file)
         };
@@ -224,10 +240,12 @@ fn handle_client(local_node: &LocalNode, stream: TcpStream) -> Result<()> {
         )
         .map_err(|_| RemoteError::RxError)?;
 
-        println!(
-            "[info] <{}@{}> Received {}",
-            remote_node_auth.node_name, peer_addr, snapshot
-        );
+        if debug {
+            println!(
+                "[info] <{}@{}> Received {}",
+                remote_node_auth.node_name, peer_addr, snapshot
+            );
+        }
 
         Ok(())
     };
