@@ -35,6 +35,8 @@ use daemonizr::{Daemonizr, DaemonizrError, Stderr, Stdout};
 
 const PWD: &str = "/";
 const PIDFILE: &str = "/run/hbakd.pid";
+const LOGFILE_STDOUT: &str = "/var/log/hbakd.out";
+const LOGFILE_STDERR: &str = "/var/log/hbakd.err";
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -53,8 +55,8 @@ fn main() {
             .work_dir(PathBuf::from(PWD))
             .expect("invalid workdir")
             .pidfile(PathBuf::from(PIDFILE))
-            .stdout(Stdout::Close)
-            .stderr(Stderr::Close)
+            .stdout(Stdout::Redirect(PathBuf::from(LOGFILE_STDOUT)))
+            .stderr(Stderr::Redirect(PathBuf::from(LOGFILE_STDERR)))
             .umask(0o027)
             .expect("invalid umask")
             .spawn()
