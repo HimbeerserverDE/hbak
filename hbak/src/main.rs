@@ -154,6 +154,11 @@ enum Commands {
         #[arg(short, long)]
         subvols: Vec<String>,
     },
+    /// Delete backups older than the latest full backup (includes remote volumes).
+    Gc {
+        /// The volumes to limit garbage collection to.
+        volumes: Vec<String>,
+    },
 }
 
 fn logic() -> Result<()> {
@@ -340,6 +345,42 @@ fn logic() -> Result<()> {
             }
 
             restore(&local_node, address.as_deref(), no_restore, ignore_fstab)?;
+        }
+        Commands::Gc { volumes } => {
+            let local_node = LocalNode::new(Mode::Client)?;
+
+            let snapshots = local_node
+                .all_snapshots(None)?
+                .into_iter()
+                .chain(local_node.all_backups(None)?);
+
+            let snapshots: Box<dyn Iterator<Item = Snapshot>> = if volumes.is_empty() {
+                Box::new(snapshots)
+            } else {
+                Box::new(
+                    snapshots.filter(|snapshot| volumes.contains(&snapshot.volume().to_string())),
+                )
+            };
+
+            let mut volumes: Vec<_> = snapshots.map(|snapshot| snapshot.volume()).collect();
+
+            // Fully deduplicate the volume Vec. This is needed because multiple snapshots
+            // may be of the same volume.
+            volumes.sort_unstable();
+            volumes.dedup();
+
+            for volume in volumes {
+                let latest_full = local_node.latest_full(volume.clone())?;
+                let to_delete = local_node
+                    .all_snapshots(Some(volume.subvol().to_string()))?
+                    .into_iter()
+                    .chain(local_node.all_backups(Some(&volume))?)
+                    .filter(|snapshot| snapshot.taken() < latest_full.taken());
+
+                for snapshot in to_delete {
+                    local_node.delete(&snapshot)?;
+                }
+            }
         }
     }
 

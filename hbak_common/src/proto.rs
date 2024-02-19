@@ -19,6 +19,7 @@ use crate::stream::{RecoveryStream, SnapshotStream, CHUNKSIZE};
 use crate::system::{MOUNTPOINTC, MOUNTPOINTS};
 use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 
+use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read};
@@ -56,6 +57,14 @@ impl Snapshot {
     /// Returns the name of the subvolume the `Snapshot` represents.
     pub fn subvol(&self) -> &str {
         &self.subvol
+    }
+
+    /// Returns the [`Volume`] the `Snapshot` represents.
+    pub fn volume(&self) -> Volume {
+        Volume {
+            node_name: self.node_name.clone(),
+            subvol: self.subvol.clone(),
+        }
     }
 
     /// Reports whether the `Snapshot` is incremental (is full otherwise).
@@ -250,6 +259,18 @@ impl TryFrom<&str> for Volume {
     }
 }
 
+impl Ord for Volume {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.to_string().cmp(&other.to_string())
+    }
+}
+
+impl PartialOrd<Volume> for Volume {
+    fn partial_cmp(&self, other: &Volume) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// A `Node` is a member of a distributed backup network
 /// that can run its own `Volumes` and store those of other `Node`s.
 pub trait Node {
@@ -370,7 +391,7 @@ impl LocalNode {
         self.config().subvols.contains(subvol)
     }
 
-    /// Reports whether the `LocalNode` is the origin of the specified `Snapshot`
+    /// Reports whether the `LocalNode` is the origin of the specified [`Snapshot`]
     /// by verifying the node name.
     pub fn owns_backup(&self, backup: &Snapshot) -> bool {
         backup.node_name() == self.config().node_name
@@ -418,16 +439,24 @@ impl LocalNode {
         Ok(snapshot)
     }
 
-    /// Returns all snapshots of the specified subvolume of this node.
-    pub fn all_snapshots(&self, subvol: String) -> Result<Vec<Snapshot>, LocalNodeError> {
-        if !self.owns_subvol(&subvol) {
-            return Err(LocalNodeError::ForeignSubvolume(subvol));
+    /// Returns all snapshots of the specified subvolume or all subvolumes of this node.
+    pub fn all_snapshots(&self, subvol: Option<String>) -> Result<Vec<Snapshot>, LocalNodeError> {
+        match subvol {
+            Some(subvol) if !self.owns_subvol(&subvol) => {
+                return Err(LocalNodeError::ForeignSubvolume(subvol));
+            }
+            _ => {}
         }
 
         let snapshots = fs::read_dir(self.mode.snapshot_dir())?;
         let mut all_snapshots = Vec::new();
         for snapshot in snapshots {
-            all_snapshots.push(Snapshot::try_from(&*snapshot?.path())?);
+            let snapshot = Snapshot::try_from(&*snapshot?.path())?;
+
+            match &subvol {
+                Some(subvol) if snapshot.subvol() != subvol => {}
+                _ => all_snapshots.push(snapshot),
+            }
         }
 
         Ok(all_snapshots)
@@ -435,7 +464,7 @@ impl LocalNode {
 
     /// Returns the latest full snapshot of the specified subvolume of this node.
     pub fn latest_snapshot_full(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
-        self.all_snapshots(subvol.clone())?
+        self.all_snapshots(Some(subvol.clone()))?
             .into_iter()
             .filter(|snapshot| !snapshot.is_incremental())
             .max_by_key(|snapshot| snapshot.taken())
@@ -444,7 +473,7 @@ impl LocalNode {
 
     /// Returns the latest incremental snapshot of the specified subvolume of this node.
     pub fn latest_snapshot_incremental(&self, subvol: String) -> Result<Snapshot, LocalNodeError> {
-        self.all_snapshots(subvol.clone())?
+        self.all_snapshots(Some(subvol.clone()))?
             .into_iter()
             .filter(|snapshot| snapshot.is_incremental())
             .max_by_key(|snapshot| snapshot.taken())
@@ -471,7 +500,7 @@ impl LocalNode {
         after: NaiveDateTime,
     ) -> Result<Vec<Snapshot>, LocalNodeError> {
         Ok(self
-            .all_snapshots(subvol)?
+            .all_snapshots(Some(subvol))?
             .into_iter()
             .filter(|snapshot| !snapshot.is_incremental() && snapshot.taken() > after)
             .collect())
@@ -485,7 +514,7 @@ impl LocalNode {
         after: NaiveDateTime,
     ) -> Result<Vec<Snapshot>, LocalNodeError> {
         Ok(self
-            .all_snapshots(subvol)?
+            .all_snapshots(Some(subvol))?
             .into_iter()
             .filter(|snapshot| snapshot.is_incremental() && snapshot.taken() > after)
             .collect())
@@ -497,14 +526,14 @@ impl LocalNode {
     /// returns the full snapshot.
     pub fn parent_of(&self, child: &Snapshot) -> Result<Snapshot, LocalNodeError> {
         let previous_full = self
-            .all_snapshots(child.subvol().to_string())?
+            .all_snapshots(Some(child.subvol().to_string()))?
             .into_iter()
             .filter(|snapshot| !snapshot.is_incremental())
             .filter(|snapshot| snapshot.taken() < child.taken())
             .max_by_key(|snapshot| snapshot.taken())
             .ok_or(LocalNodeError::NoFullSnapshot(child.subvol().to_string()))?;
         let previous_incremental = self
-            .all_snapshots(child.subvol().to_string())?
+            .all_snapshots(Some(child.subvol().to_string()))?
             .into_iter()
             .filter(|snapshot| snapshot.is_incremental())
             .filter(|snapshot| snapshot.taken() < child.taken())
@@ -812,6 +841,31 @@ impl LocalNode {
         if let Some(fstab) = fstab {
             fs::write(subvol_path.join("etc/fstab"), fstab)?;
         }
+
+        Ok(())
+    }
+
+    /// Deletes the specified snapshot from the local or remote storage directory.
+    pub fn delete(&self, snapshot: &Snapshot) -> Result<(), LocalNodeError> {
+        if self.owns_backup(snapshot) {
+            if !Command::new("btrfs")
+                .arg("subvolume")
+                .arg("delete")
+                .arg(snapshot.snapshot_path(self.mode))
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()?
+                .wait()?
+                .success()
+            {
+                return Err(LocalNodeError::BtrfsCmd);
+            }
+        } else {
+            fs::remove_file(snapshot.backup_path(self.mode))?;
+        }
+
+        let _ = fs::remove_file(snapshot.streaming_path(self.mode));
 
         Ok(())
     }
