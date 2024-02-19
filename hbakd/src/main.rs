@@ -25,12 +25,16 @@ use hbak_common::RemoteError;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::{cmp, io, thread};
+use std::{cmp, io, process, thread};
 
 use clap::Parser;
-use fork::{daemon, Fork};
+use daemonizr::{Daemonizr, DaemonizrError, Stderr, Stdout};
+
+const PWD: &str = "/";
+const PIDFILE: &str = "/run/hbakd.pid";
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -44,19 +48,46 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    if args.debug {
-        match serve(args.debug) {
+    if !args.debug {
+        match Daemonizr::new()
+            .work_dir(PathBuf::from(PWD))
+            .expect("invalid workdir")
+            .pidfile(PathBuf::from(PIDFILE))
+            .stdout(Stdout::Close)
+            .stderr(Stderr::Close)
+            .umask(0o027)
+            .expect("invalid umask")
+            .spawn()
+        {
             Ok(_) => {}
-            Err(e) => eprintln!("Error: {}", e),
-        }
-    } else {
-        match daemon(false, false) {
-            Ok(Fork::Parent(_)) => {}
-            Ok(Fork::Child) => {
-                let _ = serve(args.debug);
+            Err(DaemonizrError::AlreadyRunning) => {
+                match Daemonizr::new()
+                    .work_dir(PathBuf::from(PWD))
+                    .unwrap()
+                    .pidfile(PathBuf::from(PIDFILE))
+                    .search()
+                {
+                    Ok(pid) => {
+                        eprintln!("Another daemon with PID {} is already running", pid);
+                        process::exit(1);
+                    }
+                    Err(e) => eprintln!("Daemonization PID search error: {}", e),
+                }
             }
-            Err(e) => eprintln!("Error: {}", io::Error::from_raw_os_error(e)),
+            Err(e) => {
+                eprintln!("Daemonization error: {}", e);
+                process::exit(1);
+            }
         }
+    }
+
+    match serve(args.debug) {
+        Ok(_) => {}
+        Err(e) if args.debug => {
+            eprintln!("Error: {}", e);
+            process::exit(1);
+        }
+        Err(_) => {}
     }
 }
 
