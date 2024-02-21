@@ -459,7 +459,7 @@ impl StreamConn<Active> {
 
         let local_done = Mutex::new(false);
         thread::scope(|s| {
-            let tx = s.spawn(|| -> Result<(), NetworkError> {
+            let mut tx = Some(s.spawn(|| -> Result<(), NetworkError> {
                 for (mut r, snapshot) in tx.into_iter() {
                     stream_conn
                         .read()
@@ -475,8 +475,8 @@ impl StreamConn<Active> {
                 }
 
                 Ok(())
-            });
-            let rx = s.spawn(|| -> Result<(), NetworkError> {
+            }));
+            let mut rx = Some(s.spawn(|| -> Result<(), NetworkError> {
                 let mut remote_done = false;
 
                 while !*local_done.lock().unwrap() || !remote_done {
@@ -507,17 +507,31 @@ impl StreamConn<Active> {
                 }
 
                 Ok(())
-            });
+            }));
 
-            tx.join().unwrap()?;
+            let mut remote_done = false;
+            loop {
+                let mut local_done = local_done.lock().unwrap();
+                if tx.as_ref().expect("tx thread not joined").is_finished() && !*local_done {
+                    tx.take().expect("tx thread not joined").join().unwrap()?;
+                    *local_done = true;
 
-            *local_done.lock().unwrap() = true;
-            stream_conn
-                .read()
-                .unwrap()
-                .send_message(&StreamMessage::Done)?;
+                    stream_conn
+                        .read()
+                        .unwrap()
+                        .send_message(&StreamMessage::Done)?;
+                }
+                if rx.as_ref().expect("rx thread not joined").is_finished() && !remote_done {
+                    rx.take().expect("rx thread not joined").join().unwrap()?;
+                    remote_done = true;
+                }
 
-            rx.join().unwrap()?;
+                if *local_done && remote_done {
+                    break;
+                }
+
+                thread::sleep(READ_TIMEOUT);
+            }
 
             Ok(())
         })
