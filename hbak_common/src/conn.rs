@@ -511,23 +511,26 @@ impl StreamConn<Active> {
 
             let mut remote_done = false;
             loop {
-                let mut local_done = local_done.lock().unwrap();
-                if tx.as_ref().expect("tx thread not joined").is_finished() && !*local_done {
-                    tx.take().expect("tx thread not joined").join().unwrap()?;
-                    *local_done = true;
+                // Unlock the local_done mutex before sleeping to prevent receive thread deadlock.
+                {
+                    let mut local_done = local_done.lock().unwrap();
+                    if tx.as_ref().expect("tx thread not joined").is_finished() && !*local_done {
+                        tx.take().expect("tx thread not joined").join().unwrap()?;
+                        *local_done = true;
 
-                    stream_conn
-                        .read()
-                        .unwrap()
-                        .send_message(&StreamMessage::Done)?;
-                }
-                if rx.as_ref().expect("rx thread not joined").is_finished() && !remote_done {
-                    rx.take().expect("rx thread not joined").join().unwrap()?;
-                    remote_done = true;
-                }
+                        stream_conn
+                            .read()
+                            .unwrap()
+                            .send_message(&StreamMessage::Done)?;
+                    }
+                    if rx.as_ref().expect("rx thread not joined").is_finished() && !remote_done {
+                        rx.take().expect("rx thread not joined").join().unwrap()?;
+                        remote_done = true;
+                    }
 
-                if *local_done && remote_done {
-                    break;
+                    if *local_done && remote_done {
+                        break;
+                    }
                 }
 
                 thread::sleep(READ_TIMEOUT);
