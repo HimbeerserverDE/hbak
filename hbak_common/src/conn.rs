@@ -24,8 +24,8 @@ use crate::{NetworkError, RemoteError};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex, RwLock};
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -370,14 +370,10 @@ impl StreamConn<Active> {
         S: Fn(&Snapshot) -> Result<W, RemoteError> + Sync,
         F: Fn(Snapshot) -> Result<(), RemoteError> + Sync,
     {
-        let stream_conn = RwLock::new(self);
-
         let mut stream = None;
         let start_streaming = Arc::new(Mutex::new(false));
 
-        let mut handle = |stream_conn: &Self,
-                          message: StreamMessage|
-         -> Result<bool, NetworkError> {
+        let mut handle = |message| -> Result<bool, NetworkError> {
             match message {
                 StreamMessage::Stream(stream) => {
                     *start_streaming.lock().unwrap() = true;
@@ -388,15 +384,15 @@ impl StreamConn<Active> {
                         match rx_setup(&replicate.snapshot) {
                             Ok(w) => {
                                 stream = Some((w, replicate.snapshot));
-                                stream_conn.send_message(&StreamMessage::Stream(Ok(())))?;
+                                self.send_message(&StreamMessage::Stream(Ok(())))?;
                             }
                             Err(e) => {
-                                stream_conn.send_message(&StreamMessage::Stream(Err(e.clone())))?;
+                                self.send_message(&StreamMessage::Stream(Err(e.clone())))?;
                                 return Err(e.into());
                             }
                         }
                     } else {
-                        stream_conn.send_message(&StreamMessage::Stream(Err(
+                        self.send_message(&StreamMessage::Stream(Err(
                             RemoteError::AlreadyStreaming,
                         )))?;
                     }
@@ -406,14 +402,12 @@ impl StreamConn<Active> {
                         match stream.0.write_all(&chunk) {
                             Ok(_) => {}
                             Err(e) => {
-                                stream_conn
-                                    .send_message(&StreamMessage::Error(RemoteError::RxError))?;
+                                self.send_message(&StreamMessage::Error(RemoteError::RxError))?;
                                 return Err(e.into());
                             }
                         }
                     } else {
-                        stream_conn
-                            .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
+                        self.send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
                     }
                 }
                 StreamMessage::End(end) => {
@@ -423,19 +417,17 @@ impl StreamConn<Active> {
                         drop(current_stream.0);
 
                         if let Err(e) = rx_finish(current_stream.1) {
-                            stream_conn.send_message(&StreamMessage::Error(e.clone()))?;
+                            self.send_message(&StreamMessage::Error(e.clone()))?;
                             return Err(e.into());
                         }
                     } else {
-                        stream_conn
-                            .send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
+                        self.send_message(&StreamMessage::Error(RemoteError::NotStreaming))?;
                     }
                 }
                 StreamMessage::Done => return Ok(true),
                 StreamMessage::Error(e) => return Err(e.into()),
                 _ => {
-                    stream_conn
-                        .send_message(&StreamMessage::Error(RemoteError::IllegalTransition))?;
+                    self.send_message(&StreamMessage::Error(RemoteError::IllegalTransition))?;
                     return Err(NetworkError::IllegalTransition);
                 }
             }
@@ -443,16 +435,16 @@ impl StreamConn<Active> {
             Ok(false)
         };
 
-        let send_chunk = |stream_conn: &Self, r: &mut R| -> Result<bool, NetworkError> {
+        let send_chunk = |r: &mut R| -> Result<bool, NetworkError> {
             let mut chunk = vec![0; 16 + CHUNKSIZE];
             let n = r.read(&mut chunk)?;
             chunk.truncate(n);
 
             if !chunk.is_empty() {
-                stream_conn.send_message(&StreamMessage::Chunk(chunk))?;
+                self.send_message(&StreamMessage::Chunk(chunk))?;
                 Ok(true)
             } else {
-                stream_conn.send_message(&StreamMessage::End(Ok(())))?;
+                self.send_message(&StreamMessage::End(Ok(())))?;
                 Ok(false)
             }
         };
@@ -461,17 +453,14 @@ impl StreamConn<Active> {
         thread::scope(|s| {
             let mut tx = Some(s.spawn(|| -> Result<(), NetworkError> {
                 for (mut r, snapshot) in tx.into_iter() {
-                    stream_conn
-                        .read()
-                        .unwrap()
-                        .send_message(&StreamMessage::Replicate(snapshot.into()))?;
+                    self.send_message(&StreamMessage::Replicate(snapshot.into()))?;
 
                     while !*start_streaming.lock().unwrap() {
                         thread::sleep(READ_TIMEOUT);
                     }
                     *start_streaming.lock().unwrap() = false;
 
-                    while send_chunk(&stream_conn.read().unwrap(), &mut r)? {}
+                    while send_chunk(&mut r)? {}
                 }
 
                 Ok(())
@@ -480,7 +469,7 @@ impl StreamConn<Active> {
                 let mut remote_done = false;
 
                 while !*local_done.lock().unwrap() || !remote_done {
-                    let message = match stream_conn.read().unwrap().recv_message() {
+                    let message = match self.recv_message() {
                         Ok(message) => message,
                         Err(NetworkError::Bincode(bincode_err)) => match *bincode_err {
                             bincode::ErrorKind::Io(io_err)
@@ -501,7 +490,7 @@ impl StreamConn<Active> {
                         Err(e) => return Err(e),
                     };
 
-                    if handle(stream_conn.read().unwrap().deref(), message)? {
+                    if handle(message)? {
                         remote_done = true;
                     }
                 }
@@ -518,10 +507,7 @@ impl StreamConn<Active> {
                         tx.take().expect("tx thread not joined").join().unwrap()?;
                         *local_done = true;
 
-                        stream_conn
-                            .read()
-                            .unwrap()
-                            .send_message(&StreamMessage::Done)?;
+                        self.send_message(&StreamMessage::Done)?;
                     }
                     if rx.as_ref().expect("rx thread not joined").is_finished() && !remote_done {
                         rx.take().expect("rx thread not joined").join().unwrap()?;
