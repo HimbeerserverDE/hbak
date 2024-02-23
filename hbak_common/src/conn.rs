@@ -24,7 +24,7 @@ use crate::{NetworkError, RemoteError};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
@@ -375,7 +375,7 @@ impl StreamConn<Active> {
         let mut stream = None;
         let start_streaming = Arc::new(Mutex::new(false));
 
-        let mut handle = |stream_conn: &mut Self,
+        let mut handle = |stream_conn: &Self,
                           message: StreamMessage|
          -> Result<bool, NetworkError> {
             match message {
@@ -501,7 +501,7 @@ impl StreamConn<Active> {
                         Err(e) => return Err(e),
                     };
 
-                    if handle(&mut stream_conn.write().unwrap(), message)? {
+                    if handle(stream_conn.read().unwrap().deref(), message)? {
                         remote_done = true;
                     }
                 }
