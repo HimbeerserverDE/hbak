@@ -503,14 +503,20 @@ impl StreamConn<Active> {
                 // Unlock the local_done mutex before sleeping to prevent receive thread deadlock.
                 {
                     let mut local_done = local_done.lock().unwrap();
-                    if tx.as_ref().expect("tx thread not joined").is_finished() && !*local_done {
-                        tx.take().expect("tx thread not joined").join().unwrap()?;
+                    if tx.as_ref().map(|tx| tx.is_finished()).unwrap_or(false) && !*local_done {
+                        tx.take()
+                            .expect("tx thread already joined")
+                            .join()
+                            .unwrap()?;
                         *local_done = true;
 
                         self.send_message(&StreamMessage::Done)?;
                     }
-                    if rx.as_ref().expect("rx thread not joined").is_finished() && !remote_done {
-                        rx.take().expect("rx thread not joined").join().unwrap()?;
+                    if rx.as_ref().map(|rx| rx.is_finished()).unwrap_or(false) && !remote_done {
+                        rx.take()
+                            .expect("rx thread already joined")
+                            .join()
+                            .unwrap()?;
                         remote_done = true;
                     }
 
