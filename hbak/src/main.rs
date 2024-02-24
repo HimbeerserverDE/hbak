@@ -21,12 +21,13 @@ use hbak_common::config::{NodeConfig, RemoteNode, RemoteNodeAuth};
 use hbak_common::conn::{AuthConn, DEFAULT_PORT};
 use hbak_common::message::SyncInfo;
 use hbak_common::proto::{LocalNode, Mode, Node, Snapshot, Volume};
+use hbak_common::stream::CHUNKSIZE;
 use hbak_common::system;
 use hbak_common::{LocalNodeError, RemoteError};
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Empty};
+use std::io::{BufRead, BufReader, BufWriter, Empty};
 use std::net::SocketAddr;
 use std::sync::Mutex;
 
@@ -481,7 +482,7 @@ fn sync(
 
             eprintln!("Receiving {} from {}", snapshot, remote_node.address);
 
-            Ok(file)
+            Ok(BufWriter::with_capacity(2 * CHUNKSIZE, file))
         };
 
     let rx_finish = |snapshot: Snapshot| {

@@ -21,7 +21,7 @@ use crate::stream::CHUNKSIZE;
 use crate::system;
 use crate::{NetworkError, RemoteError};
 
-use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::marker::PhantomData;
 use std::net::{SocketAddr, TcpStream};
 use std::ops::DerefMut;
@@ -357,16 +357,16 @@ impl StreamConn<Idle> {
 impl StreamConn<Active> {
     /// Transmits the passed [`std::io::Read`]s using their associated metadata.
     /// Receives remote transmissions using the provided stream setup closure.
-    pub fn data_sync<R, W, I, S, F>(
+    pub fn data_sync<B, W, I, S, F>(
         self,
         tx: I,
         rx_setup: S,
         rx_finish: F,
     ) -> Result<(), NetworkError>
     where
-        R: Read,
+        B: BufRead,
         W: Write + Send,
-        I: IntoIterator<Item = (R, Snapshot)> + Send,
+        I: IntoIterator<Item = (B, Snapshot)> + Send,
         S: Fn(&Snapshot) -> Result<W, RemoteError> + Sync,
         F: Fn(Snapshot) -> Result<(), RemoteError> + Sync,
     {
@@ -435,7 +435,7 @@ impl StreamConn<Active> {
             Ok(false)
         };
 
-        let send_chunk = |r: &mut R| -> Result<bool, NetworkError> {
+        let send_chunk = |r: &mut B| -> Result<bool, NetworkError> {
             let mut chunk = vec![0; 16 + CHUNKSIZE];
             let n = r.read(&mut chunk)?;
             chunk.truncate(n);

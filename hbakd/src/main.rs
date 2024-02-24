@@ -20,15 +20,17 @@ use error::*;
 use hbak_common::conn::{AuthServ, DEFAULT_PORT, READ_TIMEOUT};
 use hbak_common::message::SyncInfo;
 use hbak_common::proto::{LocalNode, Mode, Node, Snapshot};
+use hbak_common::stream::CHUNKSIZE;
 use hbak_common::RemoteError;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
+use std::io::{self, BufWriter};
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::{cmp, io, process, thread};
+use std::{cmp, process, thread};
 
 use clap::Parser;
 use daemonizr::{Daemonizr, DaemonizrError, Stderr, Stdout};
@@ -263,7 +265,7 @@ fn handle_client(debug: bool, local_node: &LocalNode, stream: TcpStream) -> Resu
                 );
             }
 
-            Ok(file)
+            Ok(BufWriter::with_capacity(2 * CHUNKSIZE, file))
         };
 
     let rx_finish = |snapshot: Snapshot| {

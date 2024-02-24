@@ -22,7 +22,7 @@ use crate::{LocalNodeError, SnapshotParseError, VolumeParseError};
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::{fmt, fs};
@@ -589,7 +589,7 @@ impl LocalNode {
 
     /// Returns a new [`Read`] wrapping the provided snapshot or backup.
     /// Performs encryption if exporting a local [`Snapshot`].
-    pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn Read + Send>, LocalNodeError> {
+    pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn BufRead + Send>, LocalNodeError> {
         if self.owns_backup(snapshot) {
             Ok(Box::new(self.send_snapshot(snapshot)?))
         } else {
