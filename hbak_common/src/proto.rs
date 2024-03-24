@@ -587,7 +587,7 @@ impl LocalNode {
         self.send_snapshot(&self.latest_snapshot_full(subvol)?)
     }
 
-    /// Returns a new [`Read`] wrapping the provided snapshot or backup.
+    /// Returns a new [`io::Read`] wrapping the provided snapshot or backup.
     /// Performs encryption if exporting a local [`Snapshot`].
     pub fn export(&self, snapshot: &Snapshot) -> Result<Box<dyn BufRead + Send>, LocalNodeError> {
         if self.owns_backup(snapshot) {
