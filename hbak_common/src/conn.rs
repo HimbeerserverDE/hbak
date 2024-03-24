@@ -74,8 +74,32 @@ pub struct AuthConn {
 
 impl AuthConn {
     /// Shorthand for `AuthConn::from(TcpStream::connect_timeout(addr, CONNECT_TIMEOUT)?)`.
+    ///
+    /// This is a low-level constructor that should not be used for dual stack connectivity.
+    /// Use [`AuthConn::new_first_success`] unless its behavior is unsuitable.
     pub fn new(addr: &SocketAddr) -> Result<Self, NetworkError> {
         Ok(TcpStream::connect_timeout(addr, CONNECT_TIMEOUT)?.into())
+    }
+
+    /// Iterates over the passed addresses until a connection succeeds
+    /// or there are no more addresses left to try.
+    ///
+    /// This is useful for dual stack connectivity and should replace the low-level
+    /// [`AuthConn::new`] constructor in most cases.
+    pub fn new_first_success<A>(addrs: A) -> Result<Self, NetworkError>
+    where
+        A: Iterator<Item = SocketAddr> + ExactSizeIterator + Clone,
+    {
+        for addr in addrs.clone() {
+            match Self::new(&addr) {
+                Ok(conn) => return Ok(conn),
+                // Stable version of [`ExactSizeIterator::is_empty`] (tracking issue: #35428).
+                Err(e) if addrs.len() == 0 => return Err(e),
+                _ => {}
+            }
+        }
+
+        Err(NetworkError::NoAddrs)
     }
 
     /// Performs mutual authentication and encryption of the connection

@@ -28,7 +28,7 @@ use hbak_common::{LocalNodeError, RemoteError};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Empty};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
@@ -401,12 +401,12 @@ fn sync(
     push: &[String],
     pull: &[String],
 ) -> Result<()> {
-    let address = match remote_node.address.parse() {
-        Ok(address) => address,
-        Err(_) => SocketAddr::new(remote_node.address.parse()?, DEFAULT_PORT),
+    let addrs = match remote_node.address.to_socket_addrs() {
+        Ok(addrs) => addrs,
+        Err(_) => (remote_node.address.as_str(), DEFAULT_PORT).to_socket_addrs()?,
     };
 
-    let auth_conn = AuthConn::new(&address)?;
+    let auth_conn = AuthConn::new_first_success(addrs)?;
     let stream_conn = auth_conn.secure_stream(
         local_node.name().to_string(),
         remote_node.address.to_string(),
