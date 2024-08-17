@@ -12,7 +12,7 @@ makedepends=('rust' 'cargo' 'gcc')
 provides=('hbak')
 conflicts=('hbak')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/HimbeerserverDE/hbak/archive/${pkgver}.tar.gz")
-sha512sums=('5db3120d6aba2e0864ebc4fb06f71d7507b4d5ee19bd11a602a4805cdb92d8b0ba1260648bef300c9c01b20bd165240cb14350099da58f07296bdfe4ab323438')
+sha512sums=('2e8c1db88267abd2fd89bf23b40fa2a572d7a672cbd8318bc2cf5e70f78396edb205e31ddd1fc56404f33daac7892f8190661d25e02eb46667d2fd01b18bc993')
 
 
 build() {
